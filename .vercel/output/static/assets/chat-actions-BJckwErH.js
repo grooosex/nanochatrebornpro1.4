@@ -1,0 +1,1 @@
+export{p as sendOpening}from"./routes-BgLBo-8N.js";
