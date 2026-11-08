@@ -161,26 +161,32 @@ textarea.prompt-ink.prompt-composing {
   tab-size: 8;
 }
 .prompt-dash {
-  background-image: linear-gradient(90deg, var(--color-ink) 0 3px, transparent 3px 6px);
-  background-size: 6px 1px;
-  background-repeat: repeat-x;
-  background-position: left bottom;
+  --prompt-mark: color-mix(in srgb, var(--color-ink) 28%, transparent);
+  --prompt-chip: transparent;
+  background-image:
+    repeating-linear-gradient(90deg, var(--prompt-mark) 0 2px, transparent 2px 5px),
+    linear-gradient(var(--prompt-chip), var(--prompt-chip));
+  background-size:
+    max(0px, calc(100% - 6px)) 1px,
+    max(0px, calc(100% - 6px)) 16px;
+  background-repeat: no-repeat;
+  background-position:
+    center bottom 1px,
+    center center;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
-  padding-bottom: 3px;
-  margin-bottom: -3px;
 }
 .prompt-dash-ran {
-  background-image: linear-gradient(90deg, var(--color-primary) 0 3px, transparent 3px 6px);
+  --prompt-mark: var(--color-primary);
 }
 .prompt-up {
-  background-color: rgb(196 71 59 / 0.16);
+  --prompt-chip: rgb(196 71 59 / 0.16);
 }
 .prompt-down {
-  background-color: rgb(47 92 168 / 0.14);
+  --prompt-chip: rgb(47 92 168 / 0.14);
 }
 .prompt-neg {
-  background-color: rgb(47 92 168 / 0.14);
+  --prompt-chip: rgb(47 92 168 / 0.14);
   color: #c4473b;
 }
 
