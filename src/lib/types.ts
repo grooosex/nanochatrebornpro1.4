@@ -479,6 +479,12 @@ export interface Settings {
   purePromptMidLocked?: boolean;
   /** 聊天生图的正面提示词中。和纯生图分开记。 */
   chatPromptMidLocked?: boolean;
+  /** 正面提示词.前的输入框收起。只藏框，不改里面的字。生图参数和纯生图一起记。 */
+  promptFrontFolded?: boolean;
+  /** 翻译页的原文。不进提示词。刷新、关页面都还在。 */
+  promptTrSrc?: string;
+  /** 翻译页的结果。不进提示词。 */
+  promptTrOut?: string;
   /** 一次绘图连着画几张。滑块，1–10。确定和无穷都没亮时用它。 */
   multiDrawCount?: number;
   /** 无视张数，一直画到再点绘图。和确定互斥。 */

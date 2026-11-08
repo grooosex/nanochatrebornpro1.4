@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, Dices, Download, Folder as FolderIcon, Lock, Plus, Settings, Star, Trash2, Upload } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Dices, Download, Folder as FolderIcon, Lock, Plus, RefreshCw, Settings, Star, Trash2, Upload } from "lucide-react";
 import {
   joinPromptParts,
   NAI_MODELS,
@@ -25,10 +25,8 @@ import {
 import { llmModelLabel } from "@/lib/llm-models";
 import type { AppearancePreset, Chat, CharacterPrompt, ImageParams, NaiModelId, NoiseSchedule, SamplerId, UcPreset } from "@/lib/types";
 import { cn, randomSeed, uid } from "@/lib/utils";
-import { grokOnce } from "@/lib/grok-client";
 import { appendPrompt, appendPromptLine, cleanCaret, stripRanSlots, withRanSlots } from "@/lib/random-prompt";
-import { translateText } from "@/lib/translate";
-import { isMostlyChinese } from "@/lib/prompt-groups";
+import { runPromptTr, usePromptTrBusy } from "@/lib/prompt-tr";
 import { LibraryDrawer } from "./LibraryDrawer";
 import { RandomSettings } from "./RandomPanels";
 import { RanMarks } from "./ran-field";
@@ -92,6 +90,7 @@ export function ParamsPane({ chat, mode = "chat" }: { chat: Chat; mode?: "chat" 
   const jump = useApp((s) => s.ui.paramsJump);
   const charLocked = useApp((s) => s.settings.pureCharLocked === true);
   const midLocked = useApp((s) => (mode === "pure" ? s.settings.purePromptMidLocked === true : s.settings.chatPromptMidLocked === true));
+  const frontFolded = useApp((s) => s.settings.promptFrontFolded === true);
   const previewOpen = useApp((s) => s.ui.previewParams);
   const previewRef = useRef<HTMLDivElement>(null);
   const chatId = chat.id;
@@ -129,9 +128,9 @@ export function ParamsPane({ chat, mode = "chat" }: { chat: Chat; mode?: "chat" 
   const resId = `${p.width}x${p.height}`;
   const [polarity, setPolarity] = useState<"pos" | "neg" | "tr">("pos");
   const [gear, setGear] = useState(false);
-  const [trSrc, setTrSrc] = useState("");
-  const [trOut, setTrOut] = useState("");
-  const [trBusy, setTrBusy] = useState<"literal" | "tags" | null>(null);
+  const trSrc = useApp((s) => s.settings.promptTrSrc ?? "");
+  const trOut = useApp((s) => s.settings.promptTrOut ?? "");
+  const trBusy = usePromptTrBusy();
   const promptGloss = useApp((s) => s.settings.promptGloss !== false);
   const promptNet = useApp((s) => s.settings.promptNet === true);
   const promptPreview = useApp(
@@ -385,20 +384,29 @@ export function ParamsPane({ chat, mode = "chat" }: { chat: Chat; mode?: "chat" 
 
       {polarity === "tr" && (
         <div className="mt-3">
-          <div className="mb-1 text-[13px] text-muted">原文</div>
-          <TextArea value={trSrc} placeholder="写一句想翻译的话" style={{ minHeight: 120 }} onChange={(e) => setTrSrc(e.target.value)} />
+          <div className="mb-1 flex items-center justify-between">
+            <div className="text-[13px] text-muted">原文</div>
+            <button
+              type="button"
+              className="grid size-5 place-items-center text-muted"
+              aria-label="清空原文"
+              onClick={() => useApp.getState().setSettings({ promptTrSrc: "" })}
+            >
+              <RefreshCw className="size-3.5" />
+            </button>
+          </div>
+          <TextArea
+            value={trSrc}
+            placeholder="写一句想翻译的话"
+            style={{ minHeight: 120 }}
+            onChange={(e) => useApp.getState().setSettings({ promptTrSrc: e.target.value })}
+          />
           <div className="my-3 flex gap-2">
             <button
               type="button"
               disabled={!!trBusy || !trSrc.trim()}
               className="h-8 rounded-full bg-primary px-4 text-[13px] text-on-primary disabled:opacity-40"
-              onClick={() => {
-                setTrBusy("literal");
-                void translateText(trSrc.trim(), isMostlyChinese(trSrc) ? "en" : "zh")
-                  .then((text) => setTrOut(text))
-                  .catch((err: unknown) => useApp.getState().toast(err instanceof Error ? err.message : "翻译失败"))
-                  .finally(() => setTrBusy(null));
-              }}
+              onClick={() => runPromptTr("literal")}
             >
               {trBusy === "literal" ? "翻译中" : "直译"}
             </button>
@@ -406,29 +414,17 @@ export function ParamsPane({ chat, mode = "chat" }: { chat: Chat; mode?: "chat" 
               type="button"
               disabled={!!trBusy || !trSrc.trim()}
               className="h-8 rounded-full border border-line px-4 text-[13px] disabled:opacity-40"
-              onClick={() => {
-                setTrBusy("tags");
-                void grokOnce({
-                  task: "image",
-                  max_tokens: 400,
-                  messages: [
-                    {
-                      role: "system",
-                      content: "你把用户写的画面写成 NovelAI 提示词。只输出逗号分隔的英文标签，不要解释，不要引号。",
-                    },
-                    { role: "user", content: trSrc.trim() },
-                  ],
-                })
-                  .then((text) => setTrOut(text.trim()))
-                  .catch((err: unknown) => useApp.getState().toast(err instanceof Error ? err.message : "翻译失败"))
-                  .finally(() => setTrBusy(null));
-              }}
+              onClick={() => runPromptTr("tags")}
             >
               {trBusy === "tags" ? "翻译中" : "写成提示词"}
             </button>
           </div>
           <div className="mb-1 text-[13px] text-muted">翻译结果</div>
-          <TextArea value={trOut} style={{ minHeight: 120 }} onChange={(e) => setTrOut(e.target.value)} />
+          <TextArea
+            value={trOut}
+            style={{ minHeight: 120 }}
+            onChange={(e) => useApp.getState().setSettings({ promptTrOut: e.target.value })}
+          />
           <button
             type="button"
             className="mt-3 text-[14px] text-primary disabled:opacity-40"
@@ -445,8 +441,21 @@ export function ParamsPane({ chat, mode = "chat" }: { chat: Chat; mode?: "chat" 
 
       {polarity === "pos" && (!hideSplit ? (
         <>
-          <div className="mb-1 mt-3 text-[13px] font-medium">正面提示词.前</div>
-          <PromptBox value={p.promptFront} suggest={p.tagSuggest} minH={120} onChange={(v) => patch({ promptFront: v })} />
+          <div className="mb-1 mt-3 flex items-center justify-between">
+            <div className="text-[13px] font-medium leading-5">正面提示词.前</div>
+            <button
+              type="button"
+              className="grid size-5 place-items-center text-muted"
+              aria-label={frontFolded ? "展开正面提示词前" : "折叠正面提示词前"}
+              aria-expanded={!frontFolded}
+              onClick={() => useApp.getState().setSettings({ promptFrontFolded: !frontFolded })}
+            >
+              {frontFolded ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
+            </button>
+          </div>
+          {!frontFolded && (
+            <PromptBox value={p.promptFront} suggest={p.tagSuggest} minH={120} onChange={(v) => patch({ promptFront: v })} />
+          )}
 
           <div className="mb-1 mt-3 flex items-end gap-2">
             <div className="shrink-0 pb-1.5 text-[13px] font-medium">正面提示词.中</div>
