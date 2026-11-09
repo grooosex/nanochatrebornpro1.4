@@ -38,7 +38,6 @@ import { parseReplyMarkup, type ReplyFold } from "@/lib/reply-markup";
 import type { Chat, ChatMessage, GenImage, ImageGenSource, MultiMode, PromptInsertMode, UserShot } from "@/lib/types";
 import { CHAT_SHOT_MAX, messageShots } from "@/lib/user-markup";
 import { attachImage, abortChat, branchFrom, cancelImage, cancelMemory, editMessage, regenMessage, replyPending, retryMemory, sendUser, swipeFork } from "./chat-actions";
-import { forkPager } from "@/lib/chat-fork";
 import { ChatModelSelect } from "./ModelSelect";
 import { ChatAvatar, ExpandSelect, Modal, TextArea, useCooldown, ZoomImg } from "./ui-kit";
 
@@ -52,6 +51,7 @@ export function ChatPane({ chat }: { chat: Chat }) {
   const editUser = useApp((s) => (s.ui.editUserMsg?.chatId === chat.id ? s.ui.editUserMsg : null));
   const scroller = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = useState(true);
   const draft = useApp((s) => s.composerDrafts[chat.id] ?? "");
   const shots = useApp((s) => s.composerShots[chat.id] ?? noShots);
@@ -65,6 +65,17 @@ export function ChatPane({ chat }: { chat: Chat }) {
   }, [chat.id]);
 
   useEffect(() => {
+    const root = composerRef.current;
+    if (!root) return;
+    const block = (e: TouchEvent) => {
+      if (e.target instanceof HTMLTextAreaElement) return;
+      if (e.cancelable) e.preventDefault();
+    };
+    root.addEventListener("touchmove", block, { passive: false });
+    return () => root.removeEventListener("touchmove", block);
+  }, []);
+
+  useEffect(() => {
     if (editUser) requestAnimationFrame(() => inputRef.current?.focus());
   }, [editUser?.msgId]);
 
@@ -75,6 +86,7 @@ export function ChatPane({ chat }: { chat: Chat }) {
     const full = el.scrollHeight;
     el.style.height = `${Math.min(full, 118)}px`;
     el.style.overflowY = full > 118 ? "auto" : "hidden";
+    el.style.touchAction = full > 118 ? "pan-y" : "none";
   }, [draft]);
 
   const onScroll = () => {
@@ -193,7 +205,10 @@ export function ChatPane({ chat }: { chat: Chat }) {
         </div>
       </div>
 
-      <div className="shrink-0 bg-bg px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-1">
+      <div
+        ref={composerRef}
+        className="shrink-0 touch-none bg-bg px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-1"
+      >
         {!isWorkshopChat(chat) && <WechatChip chatId={chat.id} />}
         {!isWorkshopChat(chat) && (
         <div className="mb-1.5 flex h-6 items-center gap-1.5 px-0.5 text-[13px] leading-none">
@@ -669,16 +684,25 @@ function Bubble({
   const statusOn = chat.statusBarOn === true;
   const loveOn = chat.affectionOn === true;
   const msgIndex = chat.messages.findIndex((m) => m.id === msg.id);
-  const pager = forkPager(chat, msgIndex);
-  const pagerNode = pager ? (
-    <ForkPager
-      index={pager.index}
-      count={pager.count}
-      accent={look.accent}
-      onPrev={() => swipeFork(chat.id, pager.anchorId, -1)}
-      onNext={() => swipeFork(chat.id, pager.anchorId, 1)}
-    />
-  ) : null;
+  const anchorId = msgIndex <= 0 ? null : chat.messages[msgIndex - 1]?.id;
+  const forkAfterMe = msg.role === "user" ? forkSwitch(chat, msg.id) : null;
+  const forkStartsHere = msgIndex > 0 && !anchorId ? null : forkSwitch(chat, anchorId);
+  const prev = msgIndex > 0 ? chat.messages[msgIndex - 1] : undefined;
+  const mineHasText = msg.role === "user" && (Boolean(msg.wechatLog) || Boolean(msg.content.trim()));
+  const prevHasText = prev?.role === "user" && (Boolean(prev.wechatLog) || Boolean(prev.content.trim()));
+  const nextExists = msgIndex >= 0 && msgIndex < chat.messages.length - 1;
+  const rowPager = forkAfterMe && (mineHasText || !nextExists) ? forkAfterMe : null;
+  const headPager = msg.role !== "user" && forkStartsHere && !prevHasText ? forkStartsHere : null;
+  const pagerOf = (info: { anchorId: string | null; index: number; count: number } | null) =>
+    info ? (
+      <ForkPager
+        index={info.index}
+        count={info.count}
+        accent={look.accent}
+        onPrev={() => swipeFork(chat.id, info.anchorId, -1)}
+        onNext={() => swipeFork(chat.id, info.anchorId, 1)}
+      />
+    ) : null;
   const scene =
     msg.role === "user"
       ? { body: msg.content, cards: [] as SceneCard[] }
@@ -715,15 +739,20 @@ function Bubble({
     if (msg.wechatLog) {
       return (
         <div className="mb-4 flex flex-col items-end">
-          <button
-            type="button"
-            className="rounded-[12px] border border-line bg-card px-4 py-3 text-[14px] text-ink"
-            onClick={() => useApp.getState().setUI({ wechatView: { chatId: chat.id, msgId: msg.id } })}
-          >
-            {msg.wechatLog.voided ? "失效的聊天记录" : "已保存的微信内容"}
-          </button>
-          <div className="mt-1.5 flex justify-end gap-1.5">
-            <Mini onClick={() => void branchFrom(chat.id, msg.id)} icon={<GitBranch className="size-3" />} label="开分支" />
+          <div className="flex w-fit max-w-[85%] flex-col">
+            <button
+              type="button"
+              className="w-fit self-end rounded-[12px] border border-line bg-card px-4 py-3 text-[14px] text-ink"
+              onClick={() => useApp.getState().setUI({ wechatView: { chatId: chat.id, msgId: msg.id } })}
+            >
+              {msg.wechatLog.voided ? "失效的聊天记录" : "已保存的微信内容"}
+            </button>
+            <div className="mt-1.5 flex items-center gap-2">
+              {pagerOf(rowPager)}
+              <div className="ml-auto flex gap-1.5">
+                <Mini onClick={() => void branchFrom(chat.id, msg.id)} icon={<GitBranch className="size-3" />} label="开分支" />
+              </div>
+            </div>
           </div>
         </div>
       );
@@ -738,26 +767,39 @@ function Bubble({
           </div>
         ) : null}
         {msg.content.trim() ? (
-          <div
-            className={cn(
-              "w-fit min-h-[2.75rem] min-w-[5.5rem] max-w-[85%] rounded-[18px] border px-4 py-2.5",
-              editingUser ? "border-primary bg-card" : "border-line bg-card",
-            )}
-          >
-            <div className="whitespace-pre-wrap text-[14px] leading-relaxed text-ink">{msg.content}</div>
+          <div className="flex w-fit max-w-[85%] flex-col">
+            <div
+              className={cn(
+                "w-fit min-h-[2.75rem] min-w-[5.5rem] max-w-full self-end rounded-[18px] border px-4 py-2.5",
+                editingUser ? "border-primary bg-card" : "border-line bg-card",
+              )}
+            >
+              <div className="whitespace-pre-wrap text-[14px] leading-relaxed text-ink">{msg.content}</div>
+            </div>
+            <div className="mt-1.5 flex items-center gap-2">
+              {pagerOf(rowPager)}
+              <div className="ml-auto flex gap-1.5">
+                <Mini onClick={() => onEditUser?.()} icon={<Pencil className="size-3" />} label="编辑" />
+                <Mini onClick={() => void branchFrom(chat.id, msg.id)} icon={<GitBranch className="size-3" />} label="开分支" />
+              </div>
+            </div>
           </div>
-        ) : null}
-        <div className="mt-1.5 flex justify-end gap-1.5">
-          <Mini onClick={() => onEditUser?.()} icon={<Pencil className="size-3" />} label="编辑" />
-          <Mini onClick={() => void branchFrom(chat.id, msg.id)} icon={<GitBranch className="size-3" />} label="开分支" />
-        </div>
-        {pagerNode ? <div className="mt-1 self-start">{pagerNode}</div> : null}
+        ) : (
+          <div className="mt-1.5 flex w-full items-center gap-2">
+            {pagerOf(rowPager)}
+            <div className="ml-auto flex gap-1.5">
+              <Mini onClick={() => onEditUser?.()} icon={<Pencil className="size-3" />} label="编辑" />
+              <Mini onClick={() => void branchFrom(chat.id, msg.id)} icon={<GitBranch className="size-3" />} label="开分支" />
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <div className="mb-6">
+      {headPager ? <div className="mb-1">{pagerOf(headPager)}</div> : null}
       <button
         className="mb-2 flex items-center gap-2"
         onClick={() => {
@@ -850,12 +892,17 @@ function Bubble({
           </div>
         )}
         {(msg.images.length > 0 || (showImageTray && !generating)) && (
-          <ImageBlock chat={chat} msg={msg} allowEmpty={Boolean(showImageTray && !generating)} underFrame={pagerNode} />
+          <ImageBlock chat={chat} msg={msg} allowEmpty={Boolean(showImageTray && !generating)} />
         )}
-        {!(msg.images.length > 0 || (showImageTray && !generating)) && pagerNode}
       </div>
     </div>
   );
+}
+
+function forkSwitch(chat: Chat, anchorId: string | null) {
+  const set = chat.forks?.[anchorId ?? ""];
+  if (!set || set.versions.length < 2) return null;
+  return { anchorId, index: set.active, count: set.versions.length };
 }
 
 function ForkPager({
@@ -872,7 +919,7 @@ function ForkPager({
   onNext: () => void;
 }) {
   return (
-    <div className="mt-2 flex items-center gap-1 text-[13px] font-medium" style={{ color: accent }}>
+    <div className="flex items-center gap-1 text-[13px] font-medium" style={{ color: accent }}>
       <button type="button" aria-label="上一分路" onClick={onPrev} className="grid size-6 place-items-center">
         <ChevronLeft className="size-4" />
       </button>
