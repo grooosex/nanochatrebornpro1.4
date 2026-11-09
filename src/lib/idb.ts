@@ -215,7 +215,14 @@ export async function getImage(id: string) {
 }
 
 export async function deleteImage(id: string) {
+  dropCachedUrl(id);
   await db.images.delete(id);
+}
+
+export function dropCachedUrl(id: string) {
+  const prev = urlCache.get(id);
+  if (prev) URL.revokeObjectURL(prev);
+  urlCache.delete(id);
 }
 
 const urlCache = new Map<string, string>();

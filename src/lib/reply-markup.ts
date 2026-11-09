@@ -14,6 +14,8 @@ const TOP = new Set([
   "think",
   "think_nya",
   "think_nya~",
+  "report_nya",
+  "report_nya~",
   "game",
   "background",
   "options",
@@ -170,6 +172,10 @@ function thinkTitle(name: string) {
   return name === "os" ? "内心" : "思考";
 }
 
+function isReport(name: string) {
+  return name === "report_nya" || name === "report_nya~";
+}
+
 function sliceInner(s: string, openEnd: number, name: string): { inner: string; after: number } {
   const close = findClose(s, openEnd, name);
   const next = nextTopOpen(s, openEnd, name);
@@ -188,6 +194,7 @@ export function parseReplyMarkup(raw: string): ParsedReply {
   const options: string[] = [];
   const bodySegs: string[] = [];
   let i = 0;
+  let reportLead = "";
 
   const pushNote = (title: string, body: string) => {
     const t = title.trim() || "折叠";
@@ -202,7 +209,25 @@ export function parseReplyMarkup(raw: string): ParsedReply {
       bodySegs.push(text.slice(i));
       break;
     }
-    if (lt > i) bodySegs.push(text.slice(i, lt));
+    if (lt > i) {
+      const chunk = text.slice(i, lt);
+      const upcoming = matchTag(text, lt);
+      if (upcoming && !upcoming.closing && isReport(upcoming.name)) {
+        const at = chunk.lastIndexOf("喵呜");
+        if (at >= 0) {
+          if (at > 0) bodySegs.push(chunk.slice(0, at));
+          reportLead = chunk.slice(at);
+        } else {
+          bodySegs.push(chunk);
+          reportLead = "";
+        }
+      } else {
+        bodySegs.push(chunk);
+        reportLead = "";
+      }
+    } else {
+      reportLead = "";
+    }
     const t = matchTag(text, lt);
     if (!t) {
       bodySegs.push(text[lt]);
@@ -223,6 +248,10 @@ export function parseReplyMarkup(raw: string): ParsedReply {
     if (t.name === "think" || t.name === "think_nya" || t.name === "think_nya~" || t.name === "os") {
       const body = tidy(inner);
       if (body) think.push({ kind: "think", title: thinkTitle(t.name), body });
+    } else if (isReport(t.name)) {
+      const body = tidy(reportLead + inner);
+      reportLead = "";
+      if (body) think.push({ kind: "think", title: "分析", body });
     } else if (t.name === "game") {
       bodySegs.push(inner);
     } else if (t.name === "background") {

@@ -76,6 +76,41 @@ describe("parseReplyMarkup", () => {
     assert.match(p.folds[0].body, /喵呜~/);
     assert.equal(p.body.includes("<"), false);
   });
+
+  it("folds report_nya in front of the story and leaves game out", () => {
+    const p = parseReplyMarkup(
+      `喵呜~小猫之神驾到！\n剧情推进计划如下：\n<report_nya~>\n正文用 game 标签。\n</report_nya~>\n<game>\n高二三班的操场上。\n</game>`,
+    );
+    assert.equal(p.body, "高二三班的操场上。");
+    assert.equal(p.folds.length, 1);
+    assert.equal(p.folds[0].title, "分析");
+    assert.match(p.folds[0].body, /喵呜~小猫之神驾到！/);
+    assert.match(p.folds[0].body, /剧情推进计划/);
+    assert.match(p.folds[0].body, /game 标签/);
+    assert.equal(p.folds[0].body.includes("操场"), false);
+  });
+
+  it("does not invent 分析 when the report tag is absent", () => {
+    const p = parseReplyMarkup("<game>\n她站在起跑线上。\n</game>");
+    assert.equal(p.body, "她站在起跑线上。");
+    assert.equal(p.folds.some((f) => f.title === "分析"), false);
+  });
+
+  it("does not pull an earlier story into 分析", () => {
+    const p = parseReplyMarkup("<game>故事里喵呜一声</game><report_nya~>只是计划</report_nya~>");
+    assert.equal(p.body, "故事里喵呜一声");
+    assert.equal(p.folds[0]?.title, "分析");
+    assert.equal(p.folds[0].body, "只是计划");
+  });
+
+  it("puts 思考 above 分析 when both are present", () => {
+    const p = parseReplyMarkup("<think_nya~>秘密</think_nya~><report_nya~>计划</report_nya~><game>正文</game>");
+    assert.deepEqual(
+      p.folds.map((f) => f.title),
+      ["思考", "分析"],
+    );
+    assert.equal(p.body, "正文");
+  });
 });
 
 describe("replyContextText", () => {
