@@ -228,6 +228,63 @@ html.dark {
     transform: translateY(0);
   }
 }
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pane-from-right {
+  from { transform: translate3d(16%, 0, 0); }
+  to { transform: none; }
+}
+@keyframes pane-from-left {
+  from { transform: translate3d(-16%, 0, 0); }
+  to { transform: none; }
+}
+.fade-in { animation: fade-in 180ms ease-out both; }
+.rise-in { animation: rise-in 220ms ease-out both; }
+.pop-in { animation: pop-in 160ms ease-out both; }
+.pane-from-right { animation: pane-from-right 180ms cubic-bezier(0.22, 1, 0.36, 1); }
+.pane-from-left { animation: pane-from-left 180ms cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes drawer-in {
+  from { translate: -100% 0; }
+  to { translate: 0 0; }
+}
+@keyframes drawer-out {
+  from { translate: 0 0; }
+  to { translate: -100% 0; }
+}
+@keyframes dim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dim-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+.drawer-in { animation: drawer-in 360ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+.drawer-out { animation: drawer-out 360ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+.dim-in { animation: dim-in 360ms ease-out both; }
+.dim-out { animation: dim-out 360ms ease-out both; }
+html[data-motion="off"] .fade-in,
+html[data-motion="off"] .rise-in,
+html[data-motion="off"] .pop-in,
+html[data-motion="off"] .pane-from-right,
+html[data-motion="off"] .pane-from-left,
+html[data-motion="off"] .drawer-in,
+html[data-motion="off"] .drawer-out,
+html[data-motion="off"] .dim-in,
+html[data-motion="off"] .dim-out {
+  animation: none !important;
+}
 @keyframes pulse-dot {
   0%,
   80%,

@@ -44,9 +44,9 @@ function Sheet({
 }) {
   const closeX = onX ?? onClose;
   return createPortal(
-    <div className="fixed inset-0 flex justify-center px-4 py-8" style={{ zIndex: z }}>
+    <div className="fade-in fixed inset-0 flex justify-center px-4 py-8" style={{ zIndex: z }}>
       <button type="button" className="absolute inset-0 bg-overlay/40" onClick={onClose} aria-label="关闭" />
-      <div className="relative z-10 flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden rounded-[28px] bg-bg text-ink shadow-2xl">
+      <div className="rise-in relative z-10 flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden rounded-[28px] bg-bg text-ink shadow-2xl">
         <div className="flex shrink-0 items-center gap-2 px-5 pb-3 pt-5">
           <h2 className="min-w-0 flex-1 truncate text-[20px] font-semibold">{title}</h2>
           {center}
@@ -140,9 +140,9 @@ function SchemePicker({ module, onChange }: { module: RandomModule; onChange: (m
 function SchemeSave({ onClose, onSave }: { onClose: () => void; onSave: (name: string) => void }) {
   const [name, setName] = useState("");
   return createPortal(
-    <div className="fixed inset-0 z-[80] flex items-start justify-center px-5 pt-[12vh]">
+    <div className="fade-in fixed inset-0 z-[80] flex items-start justify-center px-5 pt-[12vh]">
       <button type="button" className="absolute inset-0 bg-overlay" aria-label="关闭" onClick={onClose} />
-      <div className="relative w-full max-w-sm rounded-[24px] bg-bg px-5 pt-5 pb-5 text-ink shadow-2xl">
+      <div className="rise-in relative w-full max-w-sm rounded-[24px] bg-bg px-5 pt-5 pb-5 text-ink shadow-2xl">
         <div className="mb-4 flex items-center gap-2">
           <h2 className="min-w-0 flex-1 truncate text-[18px] font-semibold">保存方案</h2>
           <button type="button" className="grid size-9 place-items-center" aria-label="关闭" onClick={onClose}>
@@ -513,7 +513,7 @@ function SeqTurn({ module, onPick }: { module: RandomModule; onPick: (id: string
       </button>
       {open && (
         <div
-          className={`mt-2 overflow-y-auto overscroll-contain rounded-[16px] border border-line bg-card scroll-thin ${pool.length > 8 ? "max-h-[22rem]" : ""}`}
+          className={`pop-in mt-2 overflow-y-auto overscroll-contain rounded-[16px] border border-line bg-card scroll-thin ${pool.length > 8 ? "max-h-[22rem]" : ""}`}
         >
           {pool.length === 0 && <p className="flex h-11 items-center px-4 text-[14px] text-muted">没有选中的项</p>}
           {pool.map((item) => (

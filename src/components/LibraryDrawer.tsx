@@ -347,7 +347,7 @@ export function LibraryDrawer({
         createPortal(
           <div
             ref={menu}
-            className="fixed z-[80] overflow-hidden rounded-[16px] border border-line bg-card shadow-[0_16px_40px_rgb(44_40_36/0.16)]"
+            className="pop-in fixed z-[80] overflow-hidden rounded-[16px] border border-line bg-card shadow-[0_16px_40px_rgb(44_40_36/0.16)]"
             style={{
               top: pos.top,
               left: pos.left,

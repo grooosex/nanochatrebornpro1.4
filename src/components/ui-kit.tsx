@@ -306,7 +306,7 @@ export function ExpandSelect<T extends string>({
             menuSide === "center" && (align === "left" ? "left-0 right-0 w-full" : "left-1/2 w-[min(280px,80vw)] -translate-x-1/2"),
           )}
         >
-          <div className="max-h-[50vh] overflow-auto scroll-thin">
+          <div className="pop-in max-h-[50vh] overflow-auto scroll-thin">
             {options.map((o) =>
               o.header ? (
                 <div key={o.id} className="px-4 py-1.5 text-center text-[12px] font-medium text-good">
@@ -414,6 +414,48 @@ export function ZoomImg({ src, className }: { src: string; className?: string })
   );
 }
 
+export function useMotion() {
+  return useApp((s) => s.settings.motion !== false);
+}
+
+export function usePresence(open: boolean, ms = 200) {
+  const motion = useMotion();
+  const [mounted, setMounted] = useState(open);
+  const [shown, setShown] = useState(false);
+  const motionRef = useRef(motion);
+  useEffect(() => {
+    const prevMotion = motionRef.current;
+    motionRef.current = motion;
+    if (!motion) {
+      setMounted(open);
+      setShown(open);
+      return;
+    }
+    if (!prevMotion && open) {
+      setMounted(true);
+      setShown(true);
+      return;
+    }
+    if (!open) {
+      setShown(false);
+      const timer = window.setTimeout(() => setMounted(false), ms);
+      return () => window.clearTimeout(timer);
+    }
+    setMounted(true);
+    setShown(false);
+    let frame2 = 0;
+    const frame1 = requestAnimationFrame(() => {
+      frame2 = requestAnimationFrame(() => setShown(true));
+    });
+    return () => {
+      cancelAnimationFrame(frame1);
+      cancelAnimationFrame(frame2);
+    };
+  }, [open, ms, motion]);
+  if (!motion) return { mounted: open, shown: open };
+  return { mounted, shown };
+}
+
 export function Modal({
   open,
   onClose,
@@ -431,13 +473,21 @@ export function Modal({
   wide?: boolean;
   hideClose?: boolean;
 }) {
-  if (!open) return null;
+  const motion = useMotion();
+  const { mounted, shown } = usePresence(open, 200);
+  if (!mounted) return null;
   return (
-    <div className="fixed inset-0 z-[70] flex items-start justify-center px-5 pt-[12vh] pb-[max(16px,env(safe-area-inset-bottom))]">
-      <button className="absolute inset-0 bg-overlay" onClick={onClose} aria-label="关闭" />
+    <div className={cn("fixed inset-0 z-[70] flex items-start justify-center px-5 pt-[12vh] pb-[max(16px,env(safe-area-inset-bottom))]", motion && !shown && "pointer-events-none")}>
+      <button
+        className={cn("absolute inset-0 bg-overlay", motion && "transition-opacity duration-200", motion && (shown ? "opacity-100" : "opacity-0"))}
+        onClick={onClose}
+        aria-label="关闭"
+      />
       <div
         className={cn(
           "relative max-h-[calc(100dvh-12vh-16px-env(safe-area-inset-bottom))] w-full overflow-y-auto overscroll-contain rounded-[24px] bg-bg shadow-2xl scroll-thin",
+          motion && "transition duration-200 ease-out",
+          motion && (shown ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"),
           wide ? "max-w-lg" : "max-w-sm",
         )}
       >
@@ -459,16 +509,19 @@ export function Modal({
 export function ConfirmHost() {
   const confirm = useApp((s) => s.ui.confirm);
   const setUI = useApp((s) => s.setUI);
-  if (!confirm) return null;
+  const last = useRef(confirm);
+  if (confirm) last.current = confirm;
+  const view = confirm ?? last.current;
+  if (!view) return null;
   return (
-    <Modal open onClose={() => setUI({ confirm: null })} title={confirm.title}>
-      <p className="mb-5 text-[14px] leading-relaxed text-muted">{confirm.body}</p>
+    <Modal open={Boolean(confirm)} onClose={() => setUI({ confirm: null })} title={view.title}>
+      <p className="mb-5 text-[14px] leading-relaxed text-muted">{view.body}</p>
       <div className="flex gap-3">
         <GhostBtn onClick={() => setUI({ confirm: null })}>取消</GhostBtn>
         <PrimaryBtn
-          className={confirm.danger ? "bg-danger hover:bg-danger/90" : ""}
+          className={view.danger ? "bg-danger hover:bg-danger/90" : ""}
           onClick={() => {
-            confirm.onOk();
+            view.onOk();
             setUI({ confirm: null });
           }}
         >

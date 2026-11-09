@@ -20,7 +20,7 @@ import {
 import { cn, autoScrollNearEdge, indexFromY, moveId } from "@/lib/utils";
 import { listedChats, useApp } from "@/lib/store";
 import { replyStoryText } from "@/lib/reply-markup";
-import { ChatAvatar, IconBtn } from "./ui-kit";
+import { ChatAvatar, IconBtn, useMotion, usePresence } from "./ui-kit";
 import { isWorkshopChat, workshopTitle } from "@/lib/workshop";
 
 const HOLD_MS = 420;
@@ -28,6 +28,8 @@ const sidebarScroll = { home: 0, workshop: 0 };
 
 export function Sidebar() {
   const open = useApp((s) => s.ui.sidebar);
+  const motion = useMotion();
+  const presence = usePresence(open, 400);
   const setUI = useApp((s) => s.setUI);
   const folders = useApp((s) => s.folders);
   const chats = useApp((s) => s.chats);
@@ -186,10 +188,24 @@ export function Sidebar() {
     setUI({ sidebar: false, selectMode: false, selected: [], sortMode: false, menuId: null });
   };
 
-  if (!open) return null;
+  if (!presence.mounted) return null;
   return (
-    <div className="absolute inset-0 z-40 flex">
-      <aside className="relative flex h-full w-[86%] max-w-[360px] flex-col bg-bg shadow-[8px_0_32px_rgb(44_40_36/0.12)]">
+    <div className={cn("absolute inset-0 z-40", motion ? "" : "flex", open && presence.shown ? "" : "pointer-events-none")}>
+      {motion ? (
+        <button
+          className={cn("absolute inset-0 bg-overlay/40", open ? "dim-in" : "dim-out")}
+          onClick={exitSidebar}
+          aria-label="关闭侧栏"
+        />
+      ) : null}
+      <aside
+        className={cn(
+          "flex h-full w-[86%] max-w-[360px] flex-col bg-bg",
+          motion
+            ? cn("absolute inset-y-0 left-0", open ? "drawer-in" : "drawer-out")
+            : "relative shadow-[8px_0_32px_rgb(44_40_36/0.12)]",
+        )}
+      >
         <header className="px-4 pb-2 pt-[calc(env(safe-area-inset-top)+14px)]">
           {ui.sortMode ? (
             <div className="flex items-center justify-between">
@@ -437,7 +453,7 @@ export function Sidebar() {
           </div>
         )}
       </aside>
-      <button className="flex-1 bg-overlay/40" onClick={exitSidebar} />
+      {motion ? null : <button className="flex-1 bg-overlay/40" onClick={exitSidebar} />}
     </div>
   );
 }
@@ -676,7 +692,7 @@ function ChatRow({
       </div>
       {menu && !ui.selectMode && (
         <div
-          className="absolute right-2 top-12 z-20 w-44 overflow-hidden rounded-2xl border border-line bg-card py-1 shadow-lg"
+          className="pop-in absolute right-2 top-12 z-20 w-44 overflow-hidden rounded-2xl border border-line bg-card py-1 shadow-lg"
           onClick={(e) => e.stopPropagation()}
         >
           <button

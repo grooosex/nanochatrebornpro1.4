@@ -463,7 +463,7 @@ export function ModuleList({
       {bank.modules.length === 0 && !(bank.groups ?? []).length && <p className="text-center text-[13px] text-muted">还没有模块</p>}
       {menu &&
         createPortal(
-          <div className="fixed z-[80] w-32 overflow-hidden rounded-[14px] border border-line bg-card shadow-lg" style={{ top: menu.top, right: menu.right }} onPointerDown={(e) => e.stopPropagation()}>
+          <div className="pop-in fixed z-[80] w-32 overflow-hidden rounded-[14px] border border-line bg-card shadow-lg" style={{ top: menu.top, right: menu.right }} onPointerDown={(e) => e.stopPropagation()}>
             <button type="button" className="block w-full px-3 py-2.5 text-left text-[13px]" onClick={() => { toggleStar(menu.kind, menu.id); setMenu(null); }}>
               星标
             </button>
@@ -626,9 +626,9 @@ function RoundsBridge({ rounds, onChange }: { rounds: number; onChange: (n: numb
 function NameDialog({ title, value, onClose, onOk }: { title: string; value: string; onClose: () => void; onOk: (name: string) => void }) {
   const [text, setText] = useState(value);
   return createPortal(
-    <div className="fixed inset-0 z-[80] flex items-center justify-center px-6">
+    <div className="fade-in fixed inset-0 z-[80] flex items-center justify-center px-6">
       <button type="button" className="absolute inset-0 bg-overlay/40" onClick={onClose} aria-label="关闭" />
-      <div className="relative w-full max-w-sm rounded-[24px] bg-bg p-5 text-ink shadow-2xl">
+      <div className="rise-in relative w-full max-w-sm rounded-[24px] bg-bg p-5 text-ink shadow-2xl">
         <div className="mb-4 text-[18px] font-semibold">{title}</div>
         <TextInput value={text} placeholder="分组名称" onChange={(e) => setText(e.target.value)} />
         <div className="mt-4 flex justify-end gap-5 text-[15px]">
@@ -687,9 +687,9 @@ function MoveDialog({
         );
       });
   return createPortal(
-    <div className="fixed inset-0 z-[80] flex items-start justify-center px-4 py-8">
+    <div className="fade-in fixed inset-0 z-[80] flex items-start justify-center px-4 py-8">
       <button type="button" className="absolute inset-0 bg-overlay/40" onClick={onClose} aria-label="关闭" />
-      <div className="relative flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-[24px] bg-bg text-ink shadow-2xl">
+      <div className="rise-in relative flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-[24px] bg-bg text-ink shadow-2xl">
         <div className="flex shrink-0 items-center px-5 pb-3 pt-5">
           <h2 className="min-w-0 flex-1 text-[18px] font-semibold">移动</h2>
           <button type="button" className="grid size-9 place-items-center" onClick={onClose} aria-label="关闭">

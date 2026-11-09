@@ -16,7 +16,7 @@ import {
   sealPreset,
   uniquePresetName,
 } from "@/lib/st-preset";
-import { GhostBtn, Modal, PrimaryBtn, Slider, Switch, TextArea, TextInput } from "./ui-kit";
+import { GhostBtn, Modal, PrimaryBtn, Slider, Switch, TextArea, TextInput, useMotion, usePresence } from "./ui-kit";
 import { NAI_OFFICIAL_BASE } from "@/lib/nai";
 import { LookSheet } from "./LookSheet";
 import { SysPromptSheet } from "./SysPromptSheet";
@@ -24,6 +24,8 @@ import { StorageBody } from "./StorageSheet";
 
 export function ConnectionPanel() {
   const open = useApp((s) => s.ui.connection);
+  const motion = useMotion();
+  const presence = usePresence(open, 200);
   const settings = useApp((s) => s.settings);
   const setUI = useApp((s) => s.setUI);
   const [dl, setDl] = useState(false);
@@ -35,9 +37,9 @@ export function ConnectionPanel() {
     useApp.getState().setUI({ llmSettings: false });
   }, [open, llmSettings]);
   useEffect(() => {
-    if (!open) setPage(null);
-  }, [open]);
-  if (!open) return null;
+    if (!presence.mounted) setPage(null);
+  }, [presence.mounted]);
+  if (!presence.mounted) return null;
 
   const close = () => {
     setPage(null);
@@ -45,7 +47,7 @@ export function ConnectionPanel() {
   };
 
   return (
-    <div className="absolute inset-0 z-50 flex justify-center px-4 py-8">
+    <div className={cn("absolute inset-0 z-50 flex justify-center px-4 py-8", motion && "transition-opacity duration-200", motion && (presence.shown ? "opacity-100" : "pointer-events-none opacity-0"))}>
       <div className="absolute inset-0 bg-overlay/40" />
       <SheetCard
         title="设置"
@@ -142,7 +144,7 @@ export function ConnectionPanel() {
         </div>
       </Modal>
       {page && (
-        <div className="absolute inset-0 z-20 flex justify-center px-4 py-8">
+        <div className="fade-in absolute inset-0 z-20 flex justify-center px-4 py-8">
           <button type="button" className="absolute inset-0 bg-overlay/40" onClick={() => setPage(null)} aria-label="返回" />
           {page === "chat" && <ChatAiSheet onClose={() => setPage(null)} />}
           {page === "image" && <ImageAiSheet onClose={() => setPage(null)} />}
@@ -172,7 +174,7 @@ export function SheetCard({
   children: ReactNode;
 }) {
   return (
-    <div className="relative z-10 flex min-h-0 w-full max-w-md flex-col overflow-hidden rounded-[28px] bg-bg shadow-2xl">
+    <div className="rise-in relative z-10 flex min-h-0 w-full max-w-md flex-col overflow-hidden rounded-[28px] bg-bg shadow-2xl">
       <div className="flex shrink-0 items-center gap-2 px-5 pb-3 pt-5">
         <h2 className="text-[20px] font-semibold">{title}</h2>
         {titleExtra}

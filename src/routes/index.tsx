@@ -14,10 +14,24 @@ function Home() {
     const pin = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        const top = vv.offsetTop;
-        const keyboard = window.innerHeight - vv.height > 120 || top > 1;
+        const scale = vv.scale || 1;
+        const zooming = Math.abs(scale - 1) > 0.01 || Math.abs(vv.offsetLeft) > 1;
+        const keyboard = !zooming && window.innerHeight - vv.height > 120;
+        if (!keyboard) {
+          el.style.position = "";
+          el.style.left = "";
+          el.style.right = "";
+          el.style.top = "";
+          el.style.height = "";
+          el.style.transform = "";
+          return;
+        }
+        el.style.position = "fixed";
+        el.style.left = "0";
+        el.style.right = "0";
+        el.style.top = "0";
         el.style.height = `${vv.height}px`;
-        el.style.transform = keyboard ? `translate3d(0, ${top}px, 0)` : "";
+        el.style.transform = vv.offsetTop > 0 ? `translate3d(0, ${vv.offsetTop}px, 0)` : "";
       });
     };
     pin();
@@ -30,7 +44,7 @@ function Home() {
     };
   }, []);
   return (
-    <div ref={ref} className="fixed inset-x-0 top-0 h-[100dvh] overflow-hidden bg-bg">
+    <div ref={ref} className="h-[100dvh] overflow-hidden bg-bg">
       <App />
     </div>
   );

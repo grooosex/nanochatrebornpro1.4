@@ -342,7 +342,7 @@ export function ParamsPane({ chat, mode = "chat" }: { chat: Chat; mode?: "chat" 
             <Settings className="size-4" />
           </button>
           {gear ? (
-            <div className="absolute right-0 top-11 z-30 w-56 rounded-[16px] border border-line bg-card p-3 shadow-lg">
+            <div className="pop-in absolute right-0 top-11 z-30 w-56 rounded-[16px] border border-line bg-card p-3 shadow-lg">
               {(
                 [
                   ["显示预览", promptPreview, false, () => useApp.getState().setSettings({ promptPreview: !promptPreview })],

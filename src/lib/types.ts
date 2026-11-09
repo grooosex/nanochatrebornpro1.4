@@ -487,6 +487,8 @@ export interface Settings {
   /** Last explicit API pick for 配图 AI; kept at the end of the list on Grok. */
   imageModelPin?: string | null;
   theme: "light" | "dark";
+  /** 侧栏、页签、弹层的动效。关掉就是加上这些之前，立刻出现。 */
+  motion?: boolean;
   /** 纯生图收藏是否用缩略图。关掉收藏再打开仍保持。 */
   favThumbs?: boolean;
   /** 纯生图角色栏锁定。收藏/历史应用参数时不覆盖角色。 */

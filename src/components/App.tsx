@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Menu, SlidersHorizontal } from "lucide-react";
 import { emptyCharacter } from "@/lib/constants";
 import { loadTags } from "@/lib/tags";
@@ -19,7 +19,7 @@ import { PurePane } from "./PurePane";
 import { RoleEditor } from "./RoleEditor";
 import { RenameModal, Sidebar } from "./Sidebar";
 import { WorkshopHost } from "./WorkshopHost";
-import { ConfirmHost, GhostBtn, IconBtn, Modal, PrimaryBtn, TextArea, TextInput, ToastHost } from "./ui-kit";
+import { ConfirmHost, GhostBtn, IconBtn, Modal, PrimaryBtn, TextArea, TextInput, ToastHost, useMotion } from "./ui-kit";
 
 export function App() {
   const hydrate = useApp((s) => s.hydrate);
@@ -39,7 +39,18 @@ function Shell() {
   const editChat = useApp((s) => s.chats.find((c) => c.id === editing));
   const draft = useApp((s) => s.chats.find((c) => c.isDraft && c.id === currentId));
   const theme = useApp((s) => s.settings.theme);
+  const motion = useMotion();
   const look = readLook(useApp((s) => s.settings.look));
+
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    if (motion && root.dataset.motion === "off") {
+      root.querySelectorAll(".fade-in, .rise-in, .pop-in, .pane-from-left, .pane-from-right, .drawer-in, .dim-in").forEach((node) => {
+        (node as HTMLElement).style.setProperty("animation", "none", "important");
+      });
+    }
+    root.dataset.motion = motion ? "on" : "off";
+  }, [motion]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -61,20 +72,14 @@ function Shell() {
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", meta);
   }, [theme, look.paper, look.accent]);
 
-  let body: React.ReactNode;
-  if (tab === "pure") {
-    body = <PurePane />;
-  } else if (creating && draft) {
-    body = tab === "params" ? <ParamsPane chat={draft} /> : <RoleEditor chat={draft} mode="create" />;
-  } else if (editing && editChat && tab === "chat") {
-    body = <RoleEditor chat={editChat} mode="edit" />;
-  } else if (tab === "params") {
-    body = chat && !chat.isDraft ? <ParamsPane chat={chat} /> : <EmptyParams />;
-  } else if (chat && !chat.isDraft) {
-    body = <ChatPane chat={chat} />;
-  } else {
-    body = <EmptyChat />;
-  }
+  const realChat = chat && !chat.isDraft ? chat : null;
+  const paramsChat = creating && draft ? draft : realChat;
+  const chatEditor =
+    tab === "chat" && creating && draft ? (
+      <RoleEditor chat={draft} mode="create" />
+    ) : tab === "chat" && editing && editChat ? (
+      <RoleEditor chat={editChat} mode="edit" />
+    ) : null;
 
   return (
     <div className="relative mx-auto flex h-full max-w-lg flex-col bg-bg">
@@ -82,18 +87,32 @@ function Shell() {
         <IconBtn onClick={() => useApp.getState().setUI({ sidebar: true })}>
           <Menu className="size-5" />
         </IconBtn>
-        <nav className="flex flex-1 justify-center gap-7 text-[15px]">
-          <TabBtn id="chat" label="聊天" />
-          <TabBtn id="params" label="生图参数" />
-          <TabBtn id="pure" label="纯生图" />
-        </nav>
+        <TabNav />
         <IconBtn onClick={() => useApp.getState().setUI({ connection: true })}>
           <SlidersHorizontal className="size-5" />
         </IconBtn>
       </header>
 
       <main className="relative min-h-0 flex-1 overflow-hidden">
-        <div className="h-full">{body}</div>
+        <KeptTabs
+          tab={tab}
+          chat={{
+            tick: chatEditor ? "editor" : realChat,
+            node: (
+              <>
+                {chatEditor}
+                <div hidden={chatEditor != null} className="h-full">
+                  {realChat ? <ChatPane key={realChat.id} chat={realChat} /> : <EmptyChat />}
+                </div>
+              </>
+            ),
+          }}
+          params={{
+            tick: paramsChat,
+            node: paramsChat ? <ParamsPane key={paramsChat.id} chat={paramsChat} /> : <EmptyParams />,
+          }}
+          pure={{ tick: null, node: <PurePane /> }}
+        />
         {tab === "chat" && chat && !chat.isDraft && !isWorkshopChat(chat) ? <WechatDock chat={chat} /> : null}
         <Sidebar />
         <WorkshopHost />
@@ -115,16 +134,127 @@ function Shell() {
   );
 }
 
-function TabBtn({ id, label }: { id: "chat" | "params" | "pure"; label: string }) {
+const TAB_ORDER = ["chat", "params", "pure"] as const;
+
+function KeptTabs({
+  tab,
+  chat,
+  params,
+  pure,
+}: {
+  tab: "chat" | "params" | "pure";
+  chat: { tick: unknown; node: ReactNode };
+  params: { tick: unknown; node: ReactNode };
+  pure: { tick: unknown; node: ReactNode };
+}) {
+  const motion = useMotion();
+  const [seen, setSeen] = useState(tab);
+  const [cls, setCls] = useState<string | null>(null);
+  const [alive, setAlive] = useState(() => ({ chat: tab === "chat", params: tab === "params", pure: tab === "pure" }));
+  if (!alive[tab]) setAlive((s) => (s[tab] ? s : { ...s, [tab]: true }));
+  if (!motion && cls) setCls(null);
+  if (tab !== seen) {
+    setSeen(tab);
+    const next = TAB_ORDER.indexOf(tab) >= TAB_ORDER.indexOf(seen) ? "pane-from-right" : "pane-from-left";
+    setCls(motion ? next : null);
+  }
+  const shown = alive[tab] ? alive : { ...alive, [tab]: true };
+
+  useEffect(() => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.closest("[data-kept-off]")) active.blur();
+  });
+
+  const frame = (id: "chat" | "params" | "pure", pane: { tick: unknown; node: ReactNode }) =>
+    shown[id] ? <PaneFrame key={id} on={tab === id} cls={motion ? cls : null} tick={pane.tick} node={pane.node} /> : null;
+
+  return (
+    <div className="relative h-full">
+      {frame("chat", chat)}
+      {frame("params", params)}
+      {frame("pure", pure)}
+    </div>
+  );
+}
+
+function PaneFrame({ on, cls, tick, node }: { on: boolean; cls: string | null; tick: unknown; node: ReactNode }) {
+  return (
+    <div
+      inert={!on}
+      {...(on ? {} : { "data-kept-off": "" })}
+      className={on ? `absolute inset-0 ${cls ?? ""}` : "absolute inset-0 invisible pointer-events-none"}
+    >
+      <Hold freeze={!on} tick={tick}>
+        {node}
+      </Hold>
+    </div>
+  );
+}
+
+const Hold = memo(function Hold({ freeze, tick, children }: { freeze: boolean; tick: unknown; children: ReactNode }) {
+  void freeze;
+  void tick;
+  return children;
+}, (prev, next) => {
+  if (prev.freeze && next.freeze) return true;
+  if (prev.freeze && !next.freeze) return Object.is(prev.tick, next.tick);
+  return false;
+});
+
+function TabNav() {
+  const motion = useMotion();
+  if (!motion) {
+    return (
+      <nav className="flex flex-1 justify-center gap-7 text-[15px]">
+        <TabBtn id="chat" label="聊天" />
+        <TabBtn id="params" label="生图参数" />
+        <TabBtn id="pure" label="纯生图" />
+      </nav>
+    );
+  }
+  return <SlidingTabNav />;
+}
+
+function SlidingTabNav() {
+  const tab = useApp((s) => s.ui.tab);
+  const ref = useRef<HTMLElement>(null);
+  const [bar, setBar] = useState<{ left: number; width: number } | null>(null);
+  const [slide, setSlide] = useState(false);
+  useLayoutEffect(() => {
+    const nav = ref.current;
+    const btn = nav?.querySelector<HTMLElement>(`[data-tab="${tab}"]`);
+    if (!nav || !btn) return;
+    setBar({ left: btn.offsetLeft + 4, width: Math.max(0, btn.offsetWidth - 8) });
+  }, [tab]);
+  useEffect(() => {
+    setSlide(true);
+  }, []);
+  return (
+    <nav ref={ref} className="relative flex flex-1 justify-center gap-7 text-[15px]">
+      <TabBtn id="chat" label="聊天" mark={false} />
+      <TabBtn id="params" label="生图参数" mark={false} />
+      <TabBtn id="pure" label="纯生图" mark={false} />
+      {bar ? (
+        <span
+          className={`pointer-events-none absolute -bottom-0.5 h-[2px] rounded-full bg-ink ${slide ? "transition-[left,width] duration-200 ease-out" : ""}`}
+          style={{ left: bar.left, width: bar.width }}
+        />
+      ) : null}
+    </nav>
+  );
+}
+
+function TabBtn({ id, label, mark = true }: { id: "chat" | "params" | "pure"; label: string; mark?: boolean }) {
   const tab = useApp((s) => s.ui.tab);
   const on = tab === id;
   return (
     <button
+      data-tab={id}
       onClick={() => useApp.getState().setTab(id)}
       className={`relative pb-2 ${on ? "font-semibold text-ink" : "text-muted"}`}
     >
       {label}
-      {on && <span className="absolute inset-x-1 -bottom-0.5 h-[2px] rounded-full bg-ink" />}
+      {mark && on && <span className="absolute inset-x-1 -bottom-0.5 h-[2px] rounded-full bg-ink" />}
     </button>
   );
 }

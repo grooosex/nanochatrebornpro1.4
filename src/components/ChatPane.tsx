@@ -37,7 +37,7 @@ import { SceneBackdrop } from "./LookSheet";
 import { parseReplyMarkup, type ReplyFold } from "@/lib/reply-markup";
 import type { Chat, ChatMessage, GenImage, ImageGenSource, MultiMode, PromptInsertMode, UserShot } from "@/lib/types";
 import { CHAT_SHOT_MAX, messageShots } from "@/lib/user-markup";
-import { attachImage, abortChat, branchFrom, cancelImage, cancelMemory, editMessage, regenMessage, replyPending, retryMemory, sendUser, swipeFork } from "./chat-actions";
+import { attachImage, abortChat, branchFrom, cancelImage, cancelMemory, editMessage, regenAfterUser, regenMessage, replyPending, retryMemory, sendUser, swipeFork } from "./chat-actions";
 import { ChatModelSelect } from "./ModelSelect";
 import { ChatAvatar, ExpandSelect, Modal, TextArea, useCooldown, ZoomImg } from "./ui-kit";
 
@@ -736,6 +736,16 @@ function Bubble({
   };
 
   if (msg.role === "user") {
+    const regenBelow = (
+      <button
+        type="button"
+        aria-label="重新生成"
+        onClick={() => void regenAfterUser(chat.id, msg.id)}
+        className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-line bg-card text-muted"
+      >
+        <RefreshCw className="size-3" />
+      </button>
+    );
     if (msg.wechatLog) {
       return (
         <div className="mb-4 flex flex-col items-end">
@@ -779,6 +789,7 @@ function Bubble({
             <div className="mt-1.5 flex items-center gap-2">
               {pagerOf(rowPager)}
               <div className="ml-auto flex gap-1.5">
+                {regenBelow}
                 <Mini onClick={() => onEditUser?.()} icon={<Pencil className="size-3" />} label="编辑" />
                 <Mini onClick={() => void branchFrom(chat.id, msg.id)} icon={<GitBranch className="size-3" />} label="开分支" />
               </div>
@@ -788,6 +799,7 @@ function Bubble({
           <div className="mt-1.5 flex w-full items-center gap-2">
             {pagerOf(rowPager)}
             <div className="ml-auto flex gap-1.5">
+              {regenBelow}
               <Mini onClick={() => onEditUser?.()} icon={<Pencil className="size-3" />} label="编辑" />
               <Mini onClick={() => void branchFrom(chat.id, msg.id)} icon={<GitBranch className="size-3" />} label="开分支" />
             </div>

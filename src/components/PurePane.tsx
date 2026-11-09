@@ -284,9 +284,9 @@ function Sheet({
   children: ReactNode;
 }) {
   return (
-    <div className="absolute inset-0 z-20 flex flex-col justify-end bg-overlay/50">
+    <div className="fade-in absolute inset-0 z-20 flex flex-col justify-end bg-overlay/50">
       <button className="flex-1" onClick={onClose} />
-      <div className="flex max-h-[80%] min-h-0 flex-col overflow-hidden rounded-t-[28px] bg-bg text-ink">
+      <div className="rise-in flex max-h-[80%] min-h-0 flex-col overflow-hidden rounded-t-[28px] bg-bg text-ink">
         {header ?? (
           <div className="flex shrink-0 items-center justify-between gap-2 px-4 py-3">
             <div className="text-[16px] font-semibold">{title}</div>
@@ -1053,9 +1053,9 @@ function MoveSheet({
       );
     });
   return (
-    <div className="absolute inset-0 z-30 flex flex-col justify-end bg-overlay/50">
+    <div className="fade-in absolute inset-0 z-30 flex flex-col justify-end bg-overlay/50">
       <button type="button" className="min-h-8 flex-1" onClick={onClose} />
-      <div className="flex h-[70%] min-h-0 flex-col overflow-hidden rounded-t-[28px] bg-bg text-ink">
+      <div className="rise-in flex h-[70%] min-h-0 flex-col overflow-hidden rounded-t-[28px] bg-bg text-ink">
         <div className="flex shrink-0 items-center justify-between px-4 py-3">
           <div className="text-[16px] font-semibold">移动</div>
           <button type="button" onClick={onClose} aria-label="关闭">
@@ -1086,8 +1086,8 @@ function NameDialog({
 }) {
   const [text, setText] = useState(value);
   return (
-    <div className="absolute inset-0 z-30 flex items-center justify-center bg-overlay/50 px-8">
-      <div className="w-full rounded-[20px] bg-bg p-4 text-ink">
+    <div className="fade-in absolute inset-0 z-30 flex items-center justify-center bg-overlay/50 px-8">
+      <div className="rise-in w-full rounded-[20px] bg-bg p-4 text-ink">
         <div className="mb-3 text-[15px] font-semibold">{title}</div>
         <TextInput value={text} autoFocus placeholder="分组名称" onChange={(e) => setText(e.target.value)} />
         <div className="mt-3 flex justify-end gap-4">
@@ -1105,8 +1105,8 @@ function NameDialog({
 
 function ConfirmDialog({ text, onClose, onOk }: { text: string; onClose: () => void; onOk: () => void }) {
   return (
-    <div className="absolute inset-0 z-30 flex items-center justify-center bg-overlay/50 px-8">
-      <div className="w-full rounded-[20px] bg-bg p-4 text-ink">
+    <div className="fade-in absolute inset-0 z-30 flex items-center justify-center bg-overlay/50 px-8">
+      <div className="rise-in w-full rounded-[20px] bg-bg p-4 text-ink">
         <div className="text-[14px] leading-relaxed">{text}</div>
         <div className="mt-4 flex justify-end gap-4">
           <button type="button" className="text-[14px] text-muted" onClick={onClose}>
@@ -1144,9 +1144,9 @@ function FavEdit({ fav, onClose }: { fav: FavoriteItem; onClose: () => void }) {
     onClose();
   };
   return (
-    <div className="absolute inset-0 z-30 flex flex-col justify-end bg-overlay/50">
+    <div className="fade-in absolute inset-0 z-30 flex flex-col justify-end bg-overlay/50">
       <button type="button" className="min-h-8 flex-1" onClick={onClose} />
-      <div className="flex h-[78%] min-h-0 flex-col overflow-hidden rounded-t-[28px] bg-bg text-ink">
+      <div className="rise-in flex h-[78%] min-h-0 flex-col overflow-hidden rounded-t-[28px] bg-bg text-ink">
         <div className="shrink-0 px-4 py-3 text-[16px] font-semibold">编辑收藏</div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
           <div className="mb-1 text-[12px] text-muted">标题</div>
@@ -1218,9 +1218,9 @@ function FavDetail({
   const p = fav.params;
   const chars = p.characters.filter((c) => c.prompt.trim());
   return (
-    <div className="absolute inset-0 z-20 flex flex-col justify-end bg-overlay/50">
+    <div className="fade-in absolute inset-0 z-20 flex flex-col justify-end bg-overlay/50">
       <button className="flex-1" onClick={onClose} />
-      <div className="flex max-h-[80%] min-h-0 flex-col overflow-hidden rounded-t-[28px] bg-bg text-ink">
+      <div className="rise-in flex max-h-[80%] min-h-0 flex-col overflow-hidden rounded-t-[28px] bg-bg text-ink">
         <div className="flex shrink-0 items-center justify-between px-4 py-3">
           <button className="inline-flex items-center gap-1 text-[14px]" onClick={onBack}>
             <ChevronLeft className="size-4" /> 返回
@@ -1548,8 +1548,8 @@ function PureParamsSheet({
   const grok = useApp((s) => s.settings.grokModelId);
   const chat = fakePureChat(params, grok);
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-overlay/40">
-      <div className="mt-10 flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-[28px] bg-bg text-ink">
+    <div className="fade-in absolute inset-0 z-30 flex flex-col bg-overlay/40">
+      <div className="rise-in mt-10 flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-[28px] bg-bg text-ink">
         <div className="relative flex h-12 shrink-0 items-center px-4">
           <button type="button" className="font-serif text-[18px] leading-[26px]" onClick={onOpenFav}>
             参数设置

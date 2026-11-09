@@ -162,6 +162,30 @@ export async function regenMessage(id: string, msgId: string) {
   await runReply(id, lastUser?.content ?? null, after.messages.length === 0, true, set ? { anchorId, version: set.active } : undefined);
 }
 
+/** 从这条用户消息重跑下面的回复。没有回复、或卡住的空回复被清掉时，也直接再生成一条。 */
+export async function regenAfterUser(id: string, userMsgId: string) {
+  const before = chat(id);
+  if (!before) return;
+  const idx = before.messages.findIndex((m) => m.id === userMsgId);
+  if (idx < 0) return;
+  const next = before.messages[idx + 1];
+  const nextId = next && next.role !== "user" ? next.id : null;
+  abortChat(id);
+  const c = chat(id);
+  if (!c) return;
+  if (nextId && c.messages.some((m) => m.id === nextId)) {
+    await regenMessage(id, nextId);
+    return;
+  }
+  const i = c.messages.findIndex((m) => m.id === userMsgId);
+  if (i < 0 || c.messages[i + 1]) return;
+  bumpMemoryEpoch(id);
+  const me = c.messages[i];
+  const anchorId = me.id;
+  const set = c.forks?.[anchorId];
+  await runReply(id, me.content ?? "", false, true, set ? { anchorId, version: set.active } : undefined);
+}
+
 export function swipeFork(id: string, anchorId: string | null, dir: -1 | 1) {
   invalidateMemory(id);
   patch(id, (ch) => switchFork(ch, anchorId, dir));

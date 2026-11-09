@@ -539,9 +539,9 @@ function RanDiceDialog({
   };
   const schemes = (mod.schemes ?? []).slice().sort((a, b) => a.order - b.order);
   return createPortal(
-    <div className="fixed inset-0 z-[65] flex items-start justify-center px-5 pt-[8vh] pb-[max(16px,env(safe-area-inset-bottom))]">
+    <div className="fade-in fixed inset-0 z-[65] flex items-start justify-center px-5 pt-[8vh] pb-[max(16px,env(safe-area-inset-bottom))]">
       <button type="button" className="absolute inset-0 bg-overlay" aria-label="关闭" onClick={close} />
-      <div className="relative flex max-h-[78dvh] w-full max-w-sm flex-col overflow-hidden rounded-[24px] bg-bg text-ink shadow-2xl">
+      <div className="rise-in relative flex max-h-[78dvh] w-full max-w-sm flex-col overflow-hidden rounded-[24px] bg-bg text-ink shadow-2xl">
         <div className="flex shrink-0 items-center gap-2 px-5 pt-5 pb-3">
           <div className="flex min-w-0 flex-1 items-center gap-0.5">
             <FitTitle text={drafts.length > 1 ? "调整随机" : draft.name} />

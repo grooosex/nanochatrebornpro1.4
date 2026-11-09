@@ -33,9 +33,9 @@ export function AppearEditSheet() {
   };
 
   return (
-    <div className="absolute inset-0 z-[70] flex justify-center px-4 py-8">
+    <div className="fade-in absolute inset-0 z-[70] flex justify-center px-4 py-8">
       <div className="absolute inset-0 bg-overlay/40" />
-      <div className="relative z-10 flex min-h-0 w-full max-w-md flex-col overflow-hidden rounded-[28px] bg-bg shadow-2xl">
+      <div className="rise-in relative z-10 flex min-h-0 w-full max-w-md flex-col overflow-hidden rounded-[28px] bg-bg shadow-2xl">
         <div className="flex shrink-0 items-center gap-2 px-5 pb-3 pt-5">
           <h2 className="text-[20px] font-semibold">修改</h2>
           <button type="button" className="ml-auto text-[15px] text-primary" onClick={save}>

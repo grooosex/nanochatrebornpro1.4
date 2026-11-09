@@ -31,7 +31,7 @@ import {
 import { saveBlob, useApp } from "@/lib/store";
 import { cn, uid } from "@/lib/utils";
 import { ImagePick } from "./ImagePick";
-import { Slider } from "./ui-kit";
+import { Slider, Switch } from "./ui-kit";
 
 function useImageUrl(id?: string) {
   const [url, setUrl] = useState<string | null>(null);
@@ -121,6 +121,7 @@ export function LookSheet({ onClose }: { onClose: () => void }) {
   const [themesOpen, setThemesOpen] = useState(false);
   const [naming, setNaming] = useState(false);
   const themes = useApp((s) => s.settings.lookThemes) ?? EMPTY_THEMES;
+  const motion = useApp((s) => s.settings.motion !== false);
   const stepSize = (dir: 1 | -1) => {
     const next = SIZE_STEPS.filter((n) => (dir > 0 ? n > look.size : n < look.size));
     const hit = dir > 0 ? next[0] : next[next.length - 1];
@@ -152,7 +153,7 @@ export function LookSheet({ onClose }: { onClose: () => void }) {
               </button>
             </div>
             {fontOpen && (
-              <div className="absolute right-0 top-9 z-20 w-40 overflow-hidden rounded-[16px] border border-line bg-card shadow-lg">
+              <div className="pop-in absolute right-0 top-9 z-20 w-40 overflow-hidden rounded-[16px] border border-line bg-card shadow-lg">
                 {FONTS.map((f) => (
                   <button
                     key={f.id}
@@ -286,6 +287,13 @@ export function LookSheet({ onClose }: { onClose: () => void }) {
               ))}
             </div>
           ) : null}
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[14px]">动态效果</div>
+              <p className="text-[12px] leading-5 text-muted">关掉后，侧栏、页签和弹层都立刻出现</p>
+            </div>
+            <Switch on={motion} onChange={(v) => useApp.getState().setSettings({ motion: v })} label="动态效果" />
+          </div>
         </Section>
       </div>
       {picker && (
