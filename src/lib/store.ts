@@ -10,6 +10,7 @@ import {
   normalizePureParams,
 } from "./constants";
 import { db, defaultSettings, deleteImage, loadAll, putImage, rememberUrl } from "./idb";
+import { forkTouches } from "./chat-fork";
 import { cloneChat } from "./archive";
 import { isWorkshopChat } from "./workshop";
 import { syncCharsFromRole } from "./nai";
@@ -1367,6 +1368,7 @@ function blobInUse(s: State, blobId: string, skipFav?: string) {
       if (m.userImages?.some((s) => s.blobId === blobId)) return true;
       if (m.images.some((g) => g.blobId === blobId)) return true;
     }
+    if (forkTouches(c, blobId)) return true;
   }
   return false;
 }

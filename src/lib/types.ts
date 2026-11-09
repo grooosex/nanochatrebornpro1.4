@@ -216,6 +216,20 @@ export interface MemorySnap {
   foldAt: number;
 }
 
+export interface ForkVersion {
+  messages: ChatMessage[];
+  affections?: Record<string, number>;
+  memory: string;
+  memoryUntil: number;
+  memoryFoldAt: number;
+  memorySnaps: MemorySnap[];
+}
+
+export interface ForkSet {
+  active: number;
+  versions: ForkVersion[];
+}
+
 export interface Chat {
   id: string;
   folderId: string | null;
@@ -248,6 +262,8 @@ export interface Chat {
   characters: Character[];
   imageParams: ImageParams;
   messages: ChatMessage[];
+  /** 其他分路。键是节点前那条消息的 id，开场白用空字符串。当前这一支不在这里。 */
+  forks?: Record<string, ForkSet>;
   avatarBlobId?: string;
   customAvatarBlobId?: string;
   scrollTop: number;

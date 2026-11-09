@@ -29,6 +29,7 @@ import { presetStyle } from "@/lib/st-preset";
 import { affinityUpdates } from "@/lib/scene-bar";
 import { chatImageSystem, openingHint, sceneTail } from "@/lib/prompts";
 import { applySnaps, foldCoveredEnd, memoryCaughtUp, memoryFailReason, pushSnap, rewindSnaps } from "@/lib/chat-memory";
+import { branchView, failedReply, forkIsLive, mapForkMessages, parkFork, switchFork, writeForkAffection, type ForkSlot } from "@/lib/chat-fork";
 import { resolveImageWrite } from "@/lib/image-ai";
 import type { Chat, ChatMessage, GenImage, ImageGenSource, UserShot } from "@/lib/types";
 import { randomSeed, uid } from "@/lib/utils";
@@ -88,12 +89,26 @@ export function abortChat(id: string) {
   }
   invalidateMemory(id);
   busy.delete(id);
-  const last = chat(id)?.messages.at(-1);
-  if (!last || last.role === "user" || last.content.trim()) return;
   patch(id, (ch) => {
-    const tail = ch.messages.at(-1);
-    if (!tail || tail.id !== last.id || tail.content.trim()) return ch;
-    return { ...ch, messages: ch.messages.slice(0, -1) };
+    let messages = ch.messages;
+    const tail = messages.at(-1);
+    if (tail && tail.role !== "user" && !tail.content.trim()) messages = messages.slice(0, -1);
+    let forks = ch.forks;
+    for (const [key, set] of Object.entries(ch.forks ?? {})) {
+      if (!set) continue;
+      let touched = false;
+      const versions = set.versions.map((v, i) => {
+        if (i === set.active) return v;
+        if (v.messages.length === 1 && v.messages[0].role !== "user" && !v.messages[0].content.trim()) {
+          touched = true;
+          return { ...v, messages: [] };
+        }
+        return v;
+      });
+      if (touched) forks = { ...forks, [key]: { ...set, versions } };
+    }
+    if (messages === ch.messages && forks === ch.forks) return ch;
+    return { ...ch, messages, forks };
   });
 }
 
@@ -137,15 +152,19 @@ export async function regenMessage(id: string, msgId: string) {
   if (!c) return;
   const idx = c.messages.findIndex((m) => m.id === msgId);
   if (idx < 0) return;
-  const cut = c.messages.slice(0, idx);
-  patch(id, (ch) => ({
-    ...ch,
-    messages: cut,
-    ...applySnaps(rewindSnaps(ch.memorySnaps, cut.length)),
-  }));
   bumpMemoryEpoch(id);
-  const lastUser = [...cut].reverse().find((m) => m.role === "user");
-  await runReply(id, lastUser?.content ?? null, cut.length === 0, true);
+  patch(id, (ch) => parkFork(ch, idx));
+  const after = chat(id);
+  if (!after) return;
+  const anchorId = after.messages.length ? after.messages[after.messages.length - 1].id : null;
+  const set = after.forks?.[anchorId ?? ""];
+  const lastUser = [...after.messages].reverse().find((m) => m.role === "user");
+  await runReply(id, lastUser?.content ?? null, after.messages.length === 0, true, set ? { anchorId, version: set.active } : undefined);
+}
+
+export function swipeFork(id: string, anchorId: string | null, dir: -1 | 1) {
+  invalidateMemory(id);
+  patch(id, (ch) => switchFork(ch, anchorId, dir));
 }
 
 export async function branchFrom(id: string, msgId: string) {
@@ -171,41 +190,36 @@ export async function branchFrom(id: string, msgId: string) {
   useApp.getState().toast(`已开分支「${copy.name}」`);
 }
 
-function applyStream(id: string, placeholder: ChatMessage, full: string, c0: Chat) {
-  if (c0.isMulti && c0.multiMode === "group") {
-    const parts = parseGroup(full);
-    const mapped: ChatMessage[] = parts.map((p, i) => ({
-      id: i === 0 ? placeholder.id : placeholder.id + "_" + i,
-      role: p.narrator ? "narrator" : "assistant",
-      characterName: p.narrator ? undefined : p.name,
-      characterId: c0.characters.find((ch) => ch.name === p.name)?.id,
-      content: p.content,
-      images: [],
-      createdAt: Date.now(),
-    }));
-    patch(id, (c) => {
-      const old = c.messages.filter((m) => m.id === placeholder.id || m.id.startsWith(placeholder.id + "_"));
+function applyStream(id: string, placeholder: ChatMessage, full: string, c0: Chat, slot?: ForkSlot) {
+  const map = (messages: ChatMessage[]) => {
+    if (c0.isMulti && c0.multiMode === "group") {
+      const parts = parseGroup(full);
+      const mapped: ChatMessage[] = parts.map((p, i) => ({
+        id: i === 0 ? placeholder.id : placeholder.id + "_" + i,
+        role: p.narrator ? "narrator" : "assistant",
+        characterName: p.narrator ? undefined : p.name,
+        characterId: c0.characters.find((ch) => ch.name === p.name)?.id,
+        content: p.content,
+        images: [] as ChatMessage["images"],
+        createdAt: Date.now(),
+      }));
+      const old = messages.filter((m) => m.id === placeholder.id || m.id.startsWith(placeholder.id + "_"));
       const imgs = old.flatMap((m) => m.images);
       if (mapped.length && imgs.length) mapped[mapped.length - 1].images = imgs;
-      const without = c.messages.filter((m) => m.id !== placeholder.id && !m.id.startsWith(placeholder.id + "_"));
-      return {
-        ...c,
-        messages: [...without, ...mapped],
-      };
-    });
-  } else {
-    patch(id, (c) => ({
-      ...c,
-      messages: c.messages.map((m) => (m.id === placeholder.id ? { ...m, content: full } : m)),
-    }));
-  }
+      const without = messages.filter((m) => m.id !== placeholder.id && !m.id.startsWith(placeholder.id + "_"));
+      return [...without, ...mapped];
+    }
+    return messages.map((m) => (m.id === placeholder.id ? { ...m, content: full } : m));
+  };
+  patch(id, (c) => mapForkMessages(c, slot, map));
 }
 
-function rememberAffinity(id: string, placeholderId: string) {
+function rememberAffinity(id: string, placeholderId: string, slot?: ForkSlot) {
   const c = chat(id);
   if (!c?.affectionOn) return;
-  const mine = c.messages.filter((m) => m.id === placeholderId || m.id.startsWith(placeholderId + "_"));
-  const next = { ...(c.affections ?? {}) };
+  const view = branchView(c, slot);
+  const mine = view.messages.filter((m) => m.id === placeholderId || m.id.startsWith(placeholderId + "_"));
+  const next = { ...(view.affections ?? {}) };
   let changed = false;
   for (const m of mine) {
     if (m.role !== "assistant") continue;
@@ -225,13 +239,14 @@ function rememberAffinity(id: string, placeholderId: string) {
       changed = true;
     }
   }
-  if (changed) patch(id, (ch) => ({ ...ch, affections: next }));
+  if (changed) patch(id, (ch) => writeForkAffection(ch, slot, next));
 }
 
-function ensureWritingImage(id: string, placeholder: ChatMessage) {
+function ensureWritingImage(id: string, placeholder: ChatMessage, slot?: ForkSlot) {
   const live = chat(id);
   if (!live) return;
-  const target = lastAssist(live) ?? placeholder;
+  const view = branchView(live, slot);
+  const target = [...view.messages].reverse().find((m) => m.role === "assistant" || m.role === "narrator") ?? placeholder;
   if (target.images.some((g) => g.status !== "done" && g.status !== "error")) return;
   const img = makeImageRecord({
     model: live.imageParams.model,
@@ -247,21 +262,20 @@ function ensureWritingImage(id: string, placeholder: ChatMessage) {
     status: "writing",
     source: "auto",
   });
-  patch(id, (ch) => ({
-    ...ch,
-    messages: ch.messages.map((m) => (m.id === target.id ? { ...m, images: [...m.images, img] } : m)),
-  }));
+  patch(id, (ch) =>
+    mapForkMessages(ch, slot, (messages) => messages.map((m) => (m.id === target.id ? { ...m, images: [...m.images, img] } : m))),
+  );
 }
 
-async function runWorkshopReply(id: string, userText: string | null, regen: boolean) {
+async function runWorkshopReply(id: string, userText: string | null, regen: boolean, slot?: ForkSlot) {
   const c0 = chat(id);
   if (!c0) return;
   const ctrl = new AbortController();
   aborts.set(id, ctrl);
   busy.add(id);
   const placeholder = makeAssistantPlaceholder(c0);
-  patch(id, (c) => ({ ...c, messages: [...c.messages, placeholder] }));
-  const live = chat(id)!;
+  patch(id, (c) => mapForkMessages(c, slot, (messages) => [...messages, placeholder]));
+  const live = branchView(chat(id)!, slot);
   const hist = historyMessages(live).filter((m) => m.content);
   const msgs = await decorateVision(live, hist);
   const asked = userText ?? [...hist].reverse().find((m) => m.role === "user")?.content ?? "";
@@ -275,18 +289,20 @@ async function runWorkshopReply(id: string, userText: string | null, regen: bool
         messages: msgs,
         ...style,
       },
-      (text) => applyStream(id, placeholder, text, c0),
+      (text) => applyStream(id, placeholder, text, c0, slot),
       ctrl.signal,
     );
-    if (raw) applyStream(id, placeholder, raw, c0);
+    if (raw) applyStream(id, placeholder, raw, c0, slot);
   } catch (e) {
     if ((e as Error).name === "AbortError") return;
-    patch(id, (c) => ({
-      ...c,
-      messages: c.messages.map((m) =>
-        m.id === placeholder.id ? { ...m, content: m.content || `（回复失败）${e instanceof Error ? e.message : ""}` } : m,
+    const visible = branchView(chat(id)!, slot).messages.find((m) => m.id === placeholder.id)?.content.trim();
+    if (visible) return;
+    const reason = e instanceof Error ? e.message : "";
+    patch(id, (c) =>
+      mapForkMessages(c, slot, (messages) =>
+        messages.map((m) => (m.id === placeholder.id ? { ...m, content: m.content || `（回复失败）${reason}` } : m)),
       ),
-    }));
+    );
   } finally {
     busy.delete(id);
     if (aborts.get(id) === ctrl) aborts.delete(id);
@@ -294,11 +310,11 @@ async function runWorkshopReply(id: string, userText: string | null, regen: bool
   }
 }
 
-async function runReply(id: string, userText: string | null, opening: boolean, regen = false) {
+async function runReply(id: string, userText: string | null, opening: boolean, regen = false, slot?: ForkSlot) {
   const c0 = chat(id);
   if (!c0) return;
   if (isWorkshopChat(c0)) {
-    await runWorkshopReply(id, userText, regen);
+    await runWorkshopReply(id, userText, regen, slot);
     return;
   }
   const grokModelId = useApp.getState().settings.grokModelId;
@@ -308,7 +324,7 @@ async function runReply(id: string, userText: string | null, opening: boolean, r
   aborts.set(id, ctrl);
   busy.add(id);
   const placeholder = makeAssistantPlaceholder(c0);
-  patch(id, (c) => ({ ...c, messages: [...c.messages, placeholder] }));
+  patch(id, (c) => mapForkMessages(c, slot, (messages) => [...messages, placeholder]));
 
   const extra = [
     chatContextBlock(c0, { regen }),
@@ -318,7 +334,7 @@ async function runReply(id: string, userText: string | null, opening: boolean, r
     .filter(Boolean)
     .join("\n\n");
 
-  const live = chat(id)!;
+  const live = branchView(chat(id)!, slot);
   const prevScene = previousRoundImagePrompt(live.messages, placeholder.id);
   const hist = historyMessages(live).filter((m) => m.content);
   if (opening && hist.length === 0) {
@@ -344,49 +360,51 @@ async function runReply(id: string, userText: string | null, opening: boolean, r
       },
       (text) => {
         const split = splitChatPrompt(text);
-        applyStream(id, placeholder, split.visible, c0);
+        applyStream(id, placeholder, split.visible, c0, slot);
         if (imageInChat && split.started && !promptStarted) {
           promptStarted = true;
-          ensureWritingImage(id, placeholder);
+          ensureWritingImage(id, placeholder, slot);
         }
       },
       ctrl.signal,
     );
     if (raw) {
       const split = splitChatPrompt(raw);
-      applyStream(id, placeholder, split.visible, c0);
+      applyStream(id, placeholder, split.visible, c0, slot);
     }
   } catch (e) {
     if ((e as Error).name === "AbortError") return;
     streamFailed = true;
     const split = splitChatPrompt(raw);
     if (!split.visible.trim()) {
-      patch(id, (c) => ({
-        ...c,
-        messages: c.messages.map((m) =>
-          m.id === placeholder.id ? { ...m, content: m.content || `（回复失败）${e instanceof Error ? e.message : ""}` } : m,
+      const reason = e instanceof Error ? e.message : "";
+      patch(id, (c) =>
+        mapForkMessages(c, slot, (messages) =>
+          messages.map((m) => (m.id === placeholder.id ? { ...m, content: m.content || `（回复失败）${reason}` } : m)),
         ),
-      }));
-    } else {
-      applyStream(id, placeholder, split.visible, c0);
+      );
+      return;
     }
+    applyStream(id, placeholder, split.visible, c0, slot);
   } finally {
     aborts.delete(id);
     busy.delete(id);
   }
 
-  rememberAffinity(id, placeholder.id);
+  rememberAffinity(id, placeholder.id, slot);
 
-  const latest = chat(id);
-  if (!latest) return;
+  const now = chat(id);
+  if (!now) return;
+  const latest = branchView(now, slot);
   const assist = lastAssist(latest);
   const split = splitChatPrompt(raw);
+  if (assist && failedReply(assist.content)) return;
   const visibleOk = Boolean(split.visible.trim() || assist?.content.trim());
 
   if (wantImage && assist && visibleOk) {
     const splitWrite = resolveImageWrite(useApp.getState().settings.imageModelId).split;
     if (splitWrite) {
-      void attachImage(id, assist.id, "rewrite", undefined, undefined, undefined, split.visible);
+      void attachImage(id, assist.id, "rewrite", undefined, undefined, undefined, split.visible, slot);
     } else {
       if (promptStarted && !split.started && raw) {
         const again = splitChatPrompt(raw);
@@ -395,14 +413,14 @@ async function runReply(id: string, userText: string | null, opening: boolean, r
       const parsed = split.prompt ? parseImageTagOutput(split.prompt, latest) : null;
       const hasTags = Boolean(parsed && (parsed.base || Object.keys(parsed.chars).length));
       if (hasTags && parsed) {
-        void attachImage(id, assist.id, "auto", undefined, undefined, parsed);
+        void attachImage(id, assist.id, "auto", undefined, undefined, parsed, undefined, slot);
       } else if (!streamFailed || promptStarted) {
-        void attachImage(id, assist.id, "rewrite", undefined, undefined, undefined, split.visible);
+        void attachImage(id, assist.id, "rewrite", undefined, undefined, undefined, split.visible, slot);
       }
     }
   }
 
-  if (visibleOk) void maybeMemory(id);
+  if (visibleOk && forkIsLive(now, slot)) void maybeMemory(id);
 }
 
 export async function attachImage(
@@ -413,10 +431,12 @@ export async function attachImage(
   customChars?: Record<string, string>,
   parsed?: { base: string; chars: Record<string, string>; absent: string[]; presence?: PresenceUpdate },
   shotText?: string,
+  slot?: ForkSlot,
 ) {
   if (!imageOn()) return;
-  const c = chat(id);
-  if (!c) return;
+  const root = chat(id);
+  if (!root) return;
+  const c = branchView(root, slot);
   const msg = c.messages.find((m) => m.id === msgId);
   if (!msg) return;
   if (msg.images.some((g) => g.status !== "done" && g.status !== "error" && g.status !== "writing")) return;
@@ -441,28 +461,16 @@ export async function attachImage(
           status: needsWrite ? "writing" : "uploading",
           source: mode,
         });
+  const patchImg = (fn: (images: GenImage[]) => GenImage[]) =>
+    patch(id, (ch) => mapForkMessages(ch, slot, (messages) => messages.map((m) => (m.id === msgId ? { ...m, images: fn(m.images) } : m))));
   if (!writing || img.id !== writing.id) {
     if (msg.images.some((g) => g.status !== "done" && g.status !== "error")) return;
-    patch(id, (ch) => ({
-      ...ch,
-      messages: ch.messages.map((m) => (m.id === msgId ? { ...m, images: [...m.images, img] } : m)),
-    }));
+    patchImg((images) => [...images, img]);
   } else {
-    patch(id, (ch) => ({
-      ...ch,
-      messages: ch.messages.map((m) =>
-        m.id === msgId ? { ...m, images: m.images.map((g) => (g.id === img.id ? { ...g, status: "writing", source: mode } : g)) } : m,
-      ),
-    }));
+    patchImg((images) => images.map((g) => (g.id === img.id ? { ...g, status: "writing", source: mode } : g)));
   }
 
-  const setImg = (p: Partial<GenImage>) =>
-    patch(id, (ch) => ({
-      ...ch,
-      messages: ch.messages.map((m) =>
-        m.id === msgId ? { ...m, images: m.images.map((g) => (g.id === img.id ? { ...g, ...p } : g)) } : m,
-      ),
-    }));
+  const setImg = (p: Partial<GenImage>) => patchImg((images) => images.map((g) => (g.id === img.id ? { ...g, ...p } : g)));
 
   const auth = naiDrawAuth(settings);
   if (!auth) {
@@ -494,7 +502,7 @@ export async function attachImage(
         grokTail = extractGrokTail(prev.prompt, c.imageParams);
         charTails = { ...(prev.charTails || {}) };
       } else {
-        const live = chat(id) ?? c;
+        const live = branchView(chat(id) ?? c, slot);
         const standing = standingDirectives(live);
         const { shot, residual } = shotAndResidual(live.messages, msgId, shotText, standing);
         const prevScene = previousRoundImagePrompt(live.messages, msgId);
@@ -519,7 +527,7 @@ export async function attachImage(
     }
     setImg({ status: "uploading", prompt: grokTail, charTails });
     await afterPaint();
-    const live = chat(id) ?? c;
+    const live = branchView(chat(id) ?? c, slot);
     const result = await generateNai({
       chat: live,
       grokTail,
@@ -538,7 +546,7 @@ export async function attachImage(
     });
     setImg({ status: "done", blobId: result.blobId, prompt: grokTail, charTails, seed: result.seed });
     const after = chat(id);
-    if (after) {
+    if (after && forkIsLive(after, slot)) {
       const firstAssist = after.messages.find((m) => m.role === "assistant" || m.role === "narrator");
       if (firstAssist && firstAssist.id === msgId) {
         patch(id, (ch) => ({ ...ch, avatarBlobId: result.blobId }));
@@ -760,14 +768,16 @@ export async function editMessage(id: string, msgId: string, text: string, shots
   if (msg.role === "user") {
     abortChat(id);
     bumpMemoryEpoch(id);
-    const next = stampShots({ ...msg, content: text.trim() }, shots ?? []);
     const dropped = detachWechat(id);
-    patch(id, (ch) => ({
-      ...ch,
-      messages: [...ch.messages.slice(0, idx), next, ...(dropped ? [dropped] : [])],
-      ...applySnaps(rewindSnaps(ch.memorySnaps, idx)),
-    }));
-    await runReply(id, text.trim(), false);
+    patch(id, (ch) => {
+      const parked = parkFork(ch, idx + 1);
+      const messages = parked.messages.map((m) => (m.id === msgId ? stampShots({ ...m, content: text.trim() }, shots ?? []) : m));
+      if (dropped) messages.push(dropped);
+      return { ...parked, messages };
+    });
+    const parked = chat(id);
+    const set = parked?.forks?.[msgId];
+    await runReply(id, text.trim(), false, false, set ? { anchorId: msgId, version: set.active } : undefined);
   } else {
     patch(id, (ch) => ({
       ...ch,

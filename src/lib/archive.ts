@@ -10,6 +10,7 @@ import {
   pickArchiveJson,
 } from "./legacy-archive";
 import { downloadBlob, uid } from "./utils";
+import { inactiveForkMessages } from "./chat-fork";
 
 function addId(ids: Set<string>, id: unknown) {
   if (typeof id === "string" && id) ids.add(id);
@@ -52,6 +53,11 @@ function keptImageIds(dump: AppDataDump) {
       addId(ids, c.wechatAvatarBlobId);
     }
     for (const m of chat.messages ?? []) {
+      addId(ids, m.userImageBlobId);
+      for (const shot of m.userImages ?? []) addId(ids, shot.blobId);
+      addLog(ids, m.wechatLog);
+    }
+    for (const m of inactiveForkMessages(chat)) {
       addId(ids, m.userImageBlobId);
       for (const shot of m.userImages ?? []) addId(ids, shot.blobId);
       addLog(ids, m.wechatLog);

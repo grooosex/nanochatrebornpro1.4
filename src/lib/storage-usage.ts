@@ -50,6 +50,15 @@ export type StorageInput = {
   sessions?: Record<string, Room & { rooms?: Record<string, Room> }>;
 };
 
+type StorageMsg = {
+  images?: { blobId?: string }[];
+  userImages?: { blobId?: string }[];
+  userImageBlobId?: string;
+  wechatLog?: Room & { rooms?: Record<string, Room> };
+};
+
+type StorageFork = { active: number; versions: { messages: StorageMsg[] }[] };
+
 type StorageChat = {
   id: string;
   avatarBlobId?: string;
@@ -57,12 +66,8 @@ type StorageChat = {
   bgImageId?: string;
   imageParams?: { img2imgBlobId?: string };
   characters?: { lookBlobId?: string; wechatAvatarBlobId?: string }[];
-  messages?: {
-    images?: { blobId?: string }[];
-    userImages?: { blobId?: string }[];
-    userImageBlobId?: string;
-    wechatLog?: Room & { rooms?: Record<string, Room> };
-  }[];
+  messages?: StorageMsg[];
+  forks?: Record<string, StorageFork>;
 };
 
 type StorageCard = {
@@ -116,7 +121,19 @@ function walkRoom(acc: Acc, chatId: string, room: Room | undefined, pendingKind:
   for (const item of room.pending ?? []) claim(acc, item.blobId, pendingKind);
 }
 
-type Acc = StorageRefs & { firstSeen: Set<string> };
+function walkHidden(acc: Acc, chatId: string, forks?: StorageFork) {
+  if (!forks) return;
+  forks.versions.forEach((version, i) => {
+    if (i === forks.active) return;
+    for (const m of version.messages) {
+      if (m.userImageBlobId) noteUser(acc, m.userImageBlobId);
+      for (const shot of m.userImages ?? []) noteUser(acc, shot.blobId);
+      for (const img of m.images ?? []) noteGen(acc, chatId, img.blobId);
+      walkRoom(acc, chatId, m.wechatLog, "hold");
+      for (const room of Object.values(m.wechatLog?.rooms ?? {})) walkRoom(acc, chatId, room, "hold");
+    }
+  });
+}
 
 function noteGen(acc: Acc, chatId: string, blobId?: string) {
   if (!blobId || acc.locked.has(blobId) || acc.chatUser.has(blobId)) return;
@@ -136,6 +153,8 @@ function noteUser(acc: Acc, blobId?: string) {
   acc.chatGen.delete(blobId);
   acc.chatFirst.delete(blobId);
 }
+
+type Acc = StorageRefs & { firstSeen: Set<string> };
 
 export function collectStorageRefs(input: StorageInput): StorageRefs {
   const acc: Acc = {
@@ -180,6 +199,7 @@ export function collectStorageRefs(input: StorageInput): StorageRefs {
       walkRoom(acc, chat.id, m.wechatLog, "hold");
       for (const room of Object.values(m.wechatLog?.rooms ?? {})) walkRoom(acc, chat.id, room, "hold");
     }
+    for (const forks of Object.values(chat.forks ?? {})) walkHidden(acc, chat.id, forks);
     const session = input.sessions?.[chat.id];
     if (session) {
       walkRoom(acc, chat.id, session, "hold");

@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowDown,
   ArrowUp,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   Download,
   GitBranch,
@@ -35,7 +37,8 @@ import { SceneBackdrop } from "./LookSheet";
 import { parseReplyMarkup, type ReplyFold } from "@/lib/reply-markup";
 import type { Chat, ChatMessage, GenImage, ImageGenSource, MultiMode, PromptInsertMode, UserShot } from "@/lib/types";
 import { CHAT_SHOT_MAX, messageShots } from "@/lib/user-markup";
-import { attachImage, abortChat, branchFrom, cancelImage, cancelMemory, editMessage, regenMessage, replyPending, retryMemory, sendUser } from "./chat-actions";
+import { attachImage, abortChat, branchFrom, cancelImage, cancelMemory, editMessage, regenMessage, replyPending, retryMemory, sendUser, swipeFork } from "./chat-actions";
+import { forkPager } from "@/lib/chat-fork";
 import { ChatModelSelect } from "./ModelSelect";
 import { ChatAvatar, ExpandSelect, Modal, TextArea, useCooldown, ZoomImg } from "./ui-kit";
 
@@ -64,6 +67,15 @@ export function ChatPane({ chat }: { chat: Chat }) {
   useEffect(() => {
     if (editUser) requestAnimationFrame(() => inputRef.current?.focus());
   }, [editUser?.msgId]);
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "0px";
+    const full = el.scrollHeight;
+    el.style.height = `${Math.min(full, 118)}px`;
+    el.style.overflowY = full > 118 ? "auto" : "hidden";
+  }, [draft]);
 
   const onScroll = () => {
     const el = scroller.current;
@@ -285,7 +297,7 @@ export function ChatPane({ chat }: { chat: Chat }) {
             ))}
           </div>
         ) : null}
-        <div className="flex items-end gap-2">
+        <div className="flex items-end gap-1.5">
           <button
             className="grid size-9 shrink-0 place-items-center rounded-full text-muted"
             onClick={() => {
@@ -311,7 +323,7 @@ export function ChatPane({ chat }: { chat: Chat }) {
             }}
             rows={1}
             placeholder=""
-            className="max-h-32 min-h-[46px] flex-1 resize-none rounded-full border border-line bg-card px-4 py-3 text-[14px] outline-none"
+            className="scroll-hide max-h-[118px] min-h-9 flex-1 resize-none overflow-hidden rounded-[12px] border border-line bg-card px-3 py-2 text-[14px] leading-5 outline-none"
           />
           <ImagePick
             multiple
@@ -322,11 +334,11 @@ export function ChatPane({ chat }: { chat: Chat }) {
             render={(open) => (
               <button
                 type="button"
-                className="grid size-11 shrink-0 place-items-center rounded-full border border-line text-ink"
+                className="grid size-9 shrink-0 place-items-center rounded-full border border-line text-ink"
                 aria-label="添加图片"
                 onClick={open}
               >
-                <Plus className="size-5" />
+                <Plus className="size-4" />
               </button>
             )}
           />
@@ -338,10 +350,10 @@ export function ChatPane({ chat }: { chat: Chat }) {
               }
               send();
             }}
-            className="grid size-11 shrink-0 place-items-center rounded-full bg-primary text-on-primary"
+            className="grid size-9 shrink-0 place-items-center rounded-full bg-primary text-on-primary"
             aria-label={replyPending(chat.id) ? "停止" : editUser ? "保存" : "发送"}
           >
-            {replyPending(chat.id) ? <span className="size-2.5 rounded-[2px] bg-on-primary" /> : <ArrowUp className="size-5" />}
+            {replyPending(chat.id) ? <span className="size-2.5 rounded-[2px] bg-on-primary" /> : <ArrowUp className="size-4" />}
           </button>
         </div>
         {editUser ? (
@@ -656,6 +668,17 @@ function Bubble({
   const person = msg.characterName || chat.characters.find((c) => c.id === msg.characterId)?.name || chat.characters[0]?.name || chat.name || "角色";
   const statusOn = chat.statusBarOn === true;
   const loveOn = chat.affectionOn === true;
+  const msgIndex = chat.messages.findIndex((m) => m.id === msg.id);
+  const pager = forkPager(chat, msgIndex);
+  const pagerNode = pager ? (
+    <ForkPager
+      index={pager.index}
+      count={pager.count}
+      accent={look.accent}
+      onPrev={() => swipeFork(chat.id, pager.anchorId, -1)}
+      onNext={() => swipeFork(chat.id, pager.anchorId, 1)}
+    />
+  ) : null;
   const scene =
     msg.role === "user"
       ? { body: msg.content, cards: [] as SceneCard[] }
@@ -728,6 +751,7 @@ function Bubble({
           <Mini onClick={() => onEditUser?.()} icon={<Pencil className="size-3" />} label="编辑" />
           <Mini onClick={() => void branchFrom(chat.id, msg.id)} icon={<GitBranch className="size-3" />} label="开分支" />
         </div>
+        {pagerNode ? <div className="mt-1 self-start">{pagerNode}</div> : null}
       </div>
     );
   }
@@ -826,9 +850,38 @@ function Bubble({
           </div>
         )}
         {(msg.images.length > 0 || (showImageTray && !generating)) && (
-          <ImageBlock chat={chat} msg={msg} allowEmpty={Boolean(showImageTray && !generating)} />
+          <ImageBlock chat={chat} msg={msg} allowEmpty={Boolean(showImageTray && !generating)} underFrame={pagerNode} />
         )}
+        {!(msg.images.length > 0 || (showImageTray && !generating)) && pagerNode}
       </div>
+    </div>
+  );
+}
+
+function ForkPager({
+  index,
+  count,
+  accent,
+  onPrev,
+  onNext,
+}: {
+  index: number;
+  count: number;
+  accent: string;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="mt-2 flex items-center gap-1 text-[13px] font-medium" style={{ color: accent }}>
+      <button type="button" aria-label="上一分路" onClick={onPrev} className="grid size-6 place-items-center">
+        <ChevronLeft className="size-4" />
+      </button>
+      <span>
+        {index + 1}/{count}
+      </span>
+      <button type="button" aria-label="下一分路" onClick={onNext} className="grid size-6 place-items-center">
+        <ChevronRight className="size-4" />
+      </button>
     </div>
   );
 }
@@ -943,7 +996,7 @@ function Mini({ icon, label, onClick }: { icon: React.ReactNode; label: string; 
   );
 }
 
-function ImageBlock({ chat, msg, allowEmpty }: { chat: Chat; msg: ChatMessage; allowEmpty?: boolean }) {
+function ImageBlock({ chat, msg, allowEmpty, underFrame }: { chat: Chat; msg: ChatMessage; allowEmpty?: boolean; underFrame?: ReactNode }) {
   const chatImage = useApp((s) => s.settings.chatImage !== false);
   const done = msg.images.filter((g) => g.status === "done" && g.blobId);
   const pendingImg = msg.images.find((g) => g.status !== "done" && g.status !== "error");
@@ -1145,6 +1198,7 @@ function ImageBlock({ chat, msg, allowEmpty }: { chat: Chat; msg: ChatMessage; a
           }}
         />
       </div>
+      {underFrame}
     </div>
   );
 }
