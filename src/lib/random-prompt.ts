@@ -226,6 +226,21 @@ export function cleanCaret(shown: string, caret: number): number {
   return stripRanSlots(shown.slice(0, Math.max(0, caret))).length;
 }
 
+/** 退格只吃掉骰子占位时，把紧挨着的 > 一起去掉。光标停在 > 原来的位置。 */
+export function backspacePastRanSlot(
+  prevShown: string,
+  nextShown: string,
+  caret: number,
+): { text: string; caret: number } | null {
+  if (stripRanSlots(prevShown) !== stripRanSlots(nextShown)) return null;
+  if (nextShown.length >= prevShown.length) return null;
+  let i = Math.max(0, Math.min(caret, nextShown.length));
+  while (i > 0 && nextShown[i - 1] === "\u2003") i -= 1;
+  if (i === 0 || nextShown[i - 1] !== ">") return null;
+  const cut = i - 1;
+  return { text: nextShown.slice(0, cut) + nextShown.slice(cut + 1), caret: cut };
+}
+
 function tagKeys(text: string) {
   const keys = new Set<string>();
   for (const m of text.matchAll(tagRe())) {

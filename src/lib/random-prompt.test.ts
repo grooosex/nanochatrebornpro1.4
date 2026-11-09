@@ -13,6 +13,7 @@ import {
   withRanSlots,
   stripRanSlots,
   cleanCaret,
+  backspacePastRanSlot,
   commitRanDrafts,
   patchSnapFromDrafts,
   ranDraftOf,
@@ -384,6 +385,25 @@ test("live ran marks need every named module", () => {
   assert.equal(stripRanSlots(slotted), '<ran_id="角色">后');
   assert.equal(cleanCaret(slotted, slotted.indexOf("后")), '<ran_id="角色">'.length);
   assert.equal(withRanSlots('<ran_id="没有">', names), '<ran_id="没有">');
+});
+
+test("backspace on the dice slot also removes the closing bracket", () => {
+  const slot = "\u2003\u2003";
+  const prev = `<ran_id="角色">${slot}后`;
+  const afterOne = `<ran_id="角色">\u2003后`;
+  const got = backspacePastRanSlot(prev, afterOne, afterOne.indexOf("后"));
+  assert.equal(got?.text, `<ran_id="角色"\u2003后`);
+  assert.equal(got?.caret, `<ran_id="角色"`.length);
+  const mid = backspacePastRanSlot(`<ran_id="角色">${slot}`, `<ran_id="角色">\u2003`, `<ran_id="角色">`.length);
+  assert.equal(mid?.text, `<ran_id="角色"\u2003`);
+  assert.equal(mid?.caret, `<ran_id="角色"`.length);
+  assert.equal(backspacePastRanSlot(prev, `<ran_id="角色">${slot}后`, prev.length), null);
+  assert.equal(backspacePastRanSlot(prev, prev.slice(0, -1), prev.length - 1), null);
+  const full = `<ran_id="甲">${slot}<ran_id="乙">${slot}`;
+  const second = `<ran_id="甲">${slot}<ran_id="乙">\u2003`;
+  const onlySecond = backspacePastRanSlot(full, second, second.length);
+  assert.equal(onlySecond?.text, `<ran_id="甲">${slot}<ran_id="乙"\u2003`);
+  assert.equal(onlySecond?.caret, `<ran_id="甲">${slot}<ran_id="乙"`.length);
 });
 
 test("saving a ran draft rewrites ticks and clears the unfinished round", () => {

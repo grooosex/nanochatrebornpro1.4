@@ -25,7 +25,7 @@ import {
 import { llmModelLabel } from "@/lib/llm-models";
 import type { AppearancePreset, Chat, CharacterPrompt, ImageParams, NaiModelId, NoiseSchedule, SamplerId, UcPreset } from "@/lib/types";
 import { cn, randomSeed, uid } from "@/lib/utils";
-import { appendPrompt, appendPromptLine, cleanCaret, stripRanSlots, withRanSlots } from "@/lib/random-prompt";
+import { appendPrompt, appendPromptLine, backspacePastRanSlot, cleanCaret, stripRanSlots, withRanSlots } from "@/lib/random-prompt";
 import { runPromptTr, usePromptTrBusy } from "@/lib/prompt-tr";
 import { LibraryDrawer } from "./LibraryDrawer";
 import { RandomSettings } from "./RandomPanels";
@@ -1212,17 +1212,7 @@ export function PromptBox({
             let i = start;
             while (text[i] === "\u2003") i += 1;
             el.setSelectionRange(i, i);
-            return;
           }
-          if (e.key !== "Backspace") return;
-          const before = text.slice(0, start);
-          const slot = before.match(/>\u2003+$/);
-          if (!slot || slot[0].length < 2) return;
-          e.preventDefault();
-          const cut = start - slot[0].length;
-          const clean = stripRanSlots(text.slice(0, cut) + text.slice(cut + 1));
-          onChange(clean);
-          placeCaret(clean, stripRanSlots(text.slice(0, cut)).length);
         }}
         onCopy={(e) => {
           const el = e.currentTarget;
@@ -1246,12 +1236,20 @@ export function PromptBox({
           placeCaret(clean, stripRanSlots(el.value.slice(0, start)).length);
         }}
         onChange={(e) => {
-          const nextShown = e.target.value;
-          const caret = e.target.selectionStart ?? nextShown.length;
+          let nextShown = e.target.value;
+          let caret = e.target.selectionStart ?? nextShown.length;
+          const composing = e.nativeEvent instanceof InputEvent && e.nativeEvent.isComposing;
+          if (!composing) {
+            const dropped = backspacePastRanSlot(shown, nextShown, caret);
+            if (dropped) {
+              nextShown = dropped.text;
+              caret = dropped.caret;
+            }
+          }
           const clean = stripRanSlots(nextShown);
           onChange(clean);
           const again = withRanSlots(clean, names);
-          if (again !== nextShown) placeCaret(clean, cleanCaret(nextShown, caret));
+          if (again !== e.target.value) placeCaret(clean, cleanCaret(nextShown, caret));
           if (!suggest) {
             setHits([]);
             return;
